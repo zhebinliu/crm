@@ -1,0 +1,178 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Google Fonts ──────────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  --radius:    10px;
+  --sidebar-w: 240px;
+}
+
+@layer base {
+  * { box-sizing: border-box; }
+
+  body {
+    @apply bg-surface-secondary antialiased; color: #1A1D2E;
+    font-family: 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { @apply bg-transparent; }
+  ::-webkit-scrollbar-thumb { @apply bg-border-strong rounded-full; }
+}
+
+@layer components {
+
+  /* ── Card ──────────────────────────────────────────────────────────── */
+  .card {
+    @apply bg-surface rounded-[var(--radius)] border border-border shadow-card;
+  }
+
+  /* ── Buttons ───────────────────────────────────────────────────────── */
+  .btn {
+    @apply inline-flex items-center gap-1.5 rounded-[var(--radius)] px-3.5 py-2 text-sm font-medium
+           transition-all duration-150 cursor-pointer
+           focus:outline-none focus:ring-2 focus:ring-brand/30 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-primary {
+    @apply btn bg-brand text-white hover:bg-brand-700 active:bg-brand-800
+           shadow-sm hover:shadow;
+  }
+
+  .btn-secondary {
+    @apply btn bg-surface text-[#1A1D2E] border border-border
+           hover:bg-surface-secondary hover:border-border-strong active:bg-surface-tertiary;
+  }
+
+  .btn-ghost {
+    @apply btn text-[#6B7280] hover:bg-surface-secondary hover:text-[#1A1D2E];
+  }
+
+  .btn-danger {
+    @apply btn bg-danger text-white hover:bg-red-600 active:bg-red-700;
+  }
+
+  /* ── Form Controls ─────────────────────────────────────────────────── */
+  .input {
+    @apply w-full rounded-[var(--radius)] border border-border bg-surface px-3 py-2 text-sm text-[#1A1D2E]
+           placeholder-ink-muted transition-colors duration-150
+           focus:outline-none focus:ring-2 focus:ring-brand/25 focus:border-brand
+           disabled:bg-surface-secondary disabled:text-[#9CA3AF] disabled:cursor-not-allowed;
+  }
+
+  .label {
+    @apply block text-xs font-medium text-[#6B7280] mb-1;
+  }
+
+  /* ── Badge ─────────────────────────────────────────────────────────── */
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium;
+  }
+
+  /* dot prefix */
+  .badge::before {
+    content: '';
+    @apply w-1.5 h-1.5 rounded-full bg-current opacity-70 shrink-0;
+  }
+
+  /* Semantic badge variants */
+  .badge-green  { @apply bg-success-light  text-success-text; }
+  .badge-red    { @apply bg-danger-light   text-danger-text; }
+  .badge-amber  { @apply bg-warning-light  text-warning-text; }
+  .badge-orange { @apply bg-brand-light    text-brand-deep; }
+  .badge-blue   { @apply bg-info-light     text-info-text; }
+  .badge-purple { @apply bg-purple-light   text-purple-text; }
+  .badge-gray   { @apply bg-surface-tertiary text-[#6B7280]; }
+
+  /* ── Table ─────────────────────────────────────────────────────────── */
+  .ds-table {
+    @apply w-full table-auto;
+  }
+
+  .ds-table th {
+    @apply px-4 py-2.5 text-left text-xs font-semibold text-[#9CA3AF] uppercase tracking-wide
+           bg-surface-secondary border-b border-border sticky top-0 z-10;
+  }
+
+  .ds-table td {
+    @apply px-4 py-3 text-sm text-[#1A1D2E] border-b border-border;
+  }
+
+  .ds-table tr:last-child td { @apply border-b-0; }
+  .ds-table tbody tr:hover td { @apply bg-brand-light/40; }
+
+  /* Backwards compat alias */
+  .table-auto th {
+    @apply px-3 py-2.5 text-left text-xs font-semibold text-[#9CA3AF] uppercase tracking-wide
+           bg-surface-secondary border-b border-border;
+  }
+
+  .table-auto td {
+    @apply px-3 py-2.5 text-sm text-[#1A1D2E] border-b border-border;
+  }
+
+  .table-auto tr:last-child td { @apply border-b-0; }
+  .table-auto tr:hover td { @apply bg-brand-light/40; }
+
+  /* ── Info Bar / Alert ──────────────────────────────────────────────── */
+  .info-bar {
+    @apply flex items-start gap-2.5 rounded-[var(--radius)] px-4 py-3 text-sm;
+  }
+
+  .info-bar-orange { @apply info-bar bg-brand-light border border-brand/30 text-brand-deep; }
+  .info-bar-blue   { @apply info-bar bg-info-light border border-info/30 text-info-text; }
+  .info-bar-green  { @apply info-bar bg-success-light border border-success/30 text-success-text; }
+  .info-bar-red    { @apply info-bar bg-danger-light border border-danger/30 text-danger-text; }
+
+  /* ── Tabs ──────────────────────────────────────────────────────────── */
+  .tab-list {
+    @apply flex border-b border-border;
+  }
+
+  .tab-item {
+    @apply px-4 py-2 text-sm font-medium text-[#6B7280] cursor-pointer
+           border-b-2 border-transparent -mb-px transition-colors duration-150
+           hover:text-[#1A1D2E];
+  }
+
+  .tab-item.active {
+    @apply text-brand border-brand;
+  }
+
+  /* ── Empty State ───────────────────────────────────────────────────── */
+  .ds-empty {
+    @apply flex flex-col items-center justify-center gap-3 py-16 text-center;
+  }
+
+  .ds-empty-icon {
+    @apply w-14 h-14 rounded-2xl bg-surface-secondary flex items-center justify-center
+           text-[#9CA3AF];
+  }
+
+  /* ── Stat Card ─────────────────────────────────────────────────────── */
+  .stat-card {
+    @apply card p-5 flex items-center gap-4;
+  }
+
+  .stat-icon {
+    @apply w-11 h-11 rounded-xl flex items-center justify-center shrink-0;
+  }
+
+  /* ── Layout helpers ────────────────────────────────────────────────── */
+  .section-header {
+    @apply flex items-center justify-between mb-5;
+  }
+
+  .page-title {
+    @apply text-xl font-semibold text-[#1A1D2E];
+  }
+
+  .page-subtitle {
+    @apply text-sm text-[#6B7280] mt-0.5;
+  }
+}

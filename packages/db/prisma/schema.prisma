@@ -1,0 +1,1167 @@
+// ────────────────────────────────────────────────────────────────────────────
+// Tokenwave CRM — Prisma Schema
+// Salesforce-style metadata-driven CRM with LTC (Lead-to-Cash) backbone,
+// RBAC, configurable workflow engine, and approval processes.
+// ────────────────────────────────────────────────────────────────────────────
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native"]
+}
+
+datasource db {
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// TENANCY
+// ════════════════════════════════════════════════════════════════════════════
+
+model Tenant {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String
+  plan      String   @default("standard")
+  isActive  Boolean  @default(true)
+  settings  Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users              User[]
+  roles              Role[]
+  objects            ObjectDef[]
+  fields             FieldDef[]
+  picklists          Picklist[]
+  workflowRules      WorkflowRule[]
+  validationRules    ValidationRule[]
+  approvalProcesses  ApprovalProcess[]
+  leads              Lead[]
+  accounts           Account[]
+  contacts           Contact[]
+  opportunities      Opportunity[]
+  products           Product[]
+  priceBooks         PriceBook[]
+  quotes             Quote[]
+  orders             Order[]
+  contracts          Contract[]
+  activities         Activity[]
+  notes              Note[]
+  attachments        Attachment[]
+  auditLogs          AuditLog[]
+  customRecords      CustomRecord[]
+  emailTemplates     EmailTemplate[]
+  priceRules         PriceRule[]
+
+  @@map("tenants")
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// AUTH + RBAC
+// ════════════════════════════════════════════════════════════════════════════
+
+model User {
+  id              String    @id @default(cuid())
+  tenantId        String
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email           String
+  passwordHash    String
+  displayName     String
+  avatarUrl       String?
+  phone           String?
+  title           String?   // job title
+  department      String?
+  managerId       String?
+  manager         User?     @relation("UserManager", fields: [managerId], references: [id])
+  subordinates    User[]    @relation("UserManager")
+  isActive        Boolean   @default(true)
+  lastLoginAt     DateTime?
+  locale          String    @default("zh-CN")
+  timezone        String    @default("Asia/Shanghai")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  roles            UserRole[]
+  sessions         Session[]
+  refreshTokens    RefreshToken[]
+  ownedLeads       Lead[]         @relation("LeadOwner")
+  ownedAccounts    Account[]      @relation("AccountOwner")
+  ownedContacts    Contact[]      @relation("ContactOwner")
+  ownedOpps        Opportunity[]  @relation("OpportunityOwner")
+  ownedQuotes      Quote[]        @relation("QuoteOwner")
+  ownedOrders      Order[]        @relation("OrderOwner")
+  ownedActivities  Activity[]     @relation("ActivityOwner")
+  approvalActions  ApprovalAction[]
+  ownedCustoms     CustomRecord[] @relation("CustomRecordOwner")
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@map("users")
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  code        String   // e.g. "admin", "sales_manager", "sales_rep"
+  description String?
+  isSystem    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users       UserRole[]
+  permissions RolePermission[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@map("roles")
+}
+
+model Permission {
+  id          String @id @default(cuid())
+  // scoped format: "<object>.<action>" e.g. "lead.read", "opportunity.write", "admin.*"
+  code        String @unique
+  object      String // e.g. "lead", "admin", "workflow"
+  action      String // e.g. "read", "write", "delete", "approve", "*"
+  description String?
+
+  roles RolePermission[]
+
+  @@index([object])
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  userId String
+  roleId String
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  userAgent String?
+  ip        String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model RefreshToken {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String   @unique
+  revokedAt  DateTime?
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// METADATA (config-driven objects + fields)
+// ════════════════════════════════════════════════════════════════════════════
+
+enum FieldType {
+  STRING
+  TEXT        // long text
+  NUMBER
+  DECIMAL
+  CURRENCY
+  BOOLEAN
+  DATE
+  DATETIME
+  EMAIL
+  PHONE
+  URL
+  PICKLIST
+  MULTI_PICKLIST
+  REFERENCE   // FK to another object
+  FORMULA
+  JSON
+}
+
+model ObjectDef {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  apiName      String   // e.g. "Lead", "Account", "custom_widget__c"
+  label        String
+  labelPlural  String
+  isSystem     Boolean  @default(false) // standard objects cannot be deleted
+  isCustom     Boolean  @default(false)
+  iconName     String?
+  description  String?
+  layoutJson   Json?    // page layout configuration
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  fields FieldDef[]
+
+  @@unique([tenantId, apiName])
+  @@index([tenantId])
+  @@map("object_defs")
+}
+
+model FieldDef {
+  id              String    @id @default(cuid())
+  tenantId        String
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  objectId        String
+  object          ObjectDef @relation(fields: [objectId], references: [id], onDelete: Cascade)
+  apiName         String    // e.g. "amount", "custom_score__c"
+  label           String
+  type            FieldType
+  required        Boolean   @default(false)
+  unique          Boolean   @default(false)
+  isStandard      Boolean   @default(false)
+  isCustom        Boolean   @default(false)
+  defaultValue    Json?
+  helpText        String?
+  picklistId      String?
+  picklist        Picklist? @relation(fields: [picklistId], references: [id])
+  referenceTo     String?   // object apiName when type=REFERENCE
+  formulaExpr     String?   // expression when type=FORMULA
+  validationRegex String?
+  minValue        Decimal?  @db.Decimal(20, 6)
+  maxValue        Decimal?  @db.Decimal(20, 6)
+  precision       Int?
+  scale           Int?
+  readPermission  String?   // permission code required to read
+  writePermission String?
+  displayOrder    Int       @default(0)
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([objectId, apiName])
+  @@index([tenantId])
+  @@map("field_defs")
+}
+
+model Picklist {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  apiName     String   // e.g. "lead_status", "industry"
+  label       String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  values PicklistValue[]
+  fields FieldDef[]
+
+  @@unique([tenantId, apiName])
+  @@index([tenantId])
+  @@map("picklists")
+}
+
+model PicklistValue {
+  id           String   @id @default(cuid())
+  picklistId   String
+  picklist     Picklist @relation(fields: [picklistId], references: [id], onDelete: Cascade)
+  value        String
+  label        String
+  isDefault    Boolean  @default(false)
+  isActive     Boolean  @default(true)
+  displayOrder Int      @default(0)
+  color        String?  // UI hint
+  metadata     Json     @default("{}")
+
+  @@unique([picklistId, value])
+  @@map("picklist_values")
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// LTC CORE — Lead to Cash
+// ════════════════════════════════════════════════════════════════════════════
+
+model Lead {
+  id              String    @id @default(cuid())
+  tenantId        String
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ownerId         String
+  owner           User      @relation("LeadOwner", fields: [ownerId], references: [id])
+
+  // identity
+  firstName       String?
+  lastName        String
+  company         String
+  title           String?
+  email           String?
+  phone           String?
+  mobile          String?
+  website         String?
+
+  // qualification
+  status          String    @default("new") // picklist: new/working/nurturing/qualified/unqualified
+  rating          String?   // hot/warm/cold
+  source          String?   // picklist
+  industry        String?
+  annualRevenue   Decimal?  @db.Decimal(18, 2)
+  employeeCount   Int?
+  score           Int?      // lead score 0-100
+
+  // address
+  street          String?
+  city            String?
+  state           String?
+  postalCode      String?
+  country         String?
+
+  description     String?   @db.Text
+  customFields    Json      @default("{}")
+
+  // conversion
+  isConverted     Boolean   @default(false)
+  convertedAt     DateTime?
+  convertedAccountId  String?
+  convertedContactId  String?
+  convertedOppId      String?
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  createdById     String?
+  updatedById     String?
+  deletedAt       DateTime?
+
+  @@index([tenantId, status])
+  @@index([tenantId, ownerId])
+  @@index([tenantId, email])
+  @@index([tenantId, isConverted])
+  @@map("leads")
+}
+
+model Account {
+  id             String   @id @default(cuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ownerId        String
+  owner          User     @relation("AccountOwner", fields: [ownerId], references: [id])
+  parentId       String?
+  parent         Account? @relation("AccountParent", fields: [parentId], references: [id])
+  children       Account[] @relation("AccountParent")
+
+  name           String
+  type           String?  // picklist: customer/prospect/partner/competitor
+  industry       String?
+  website        String?
+  phone          String?
+  annualRevenue  Decimal? @db.Decimal(18, 2)
+  employeeCount  Int?
+  rating         String?
+  description    String?  @db.Text
+
+  billingStreet     String?
+  billingCity       String?
+  billingState      String?
+  billingPostalCode String?
+  billingCountry    String?
+  shippingStreet    String?
+  shippingCity      String?
+  shippingState     String?
+  shippingPostalCode String?
+  shippingCountry   String?
+
+  customFields   Json     @default("{}")
+
+  contacts       Contact[]
+  opportunities  Opportunity[]
+  quotes         Quote[]
+  orders         Order[]
+  contracts      Contract[]
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  createdById    String?
+  updatedById    String?
+  deletedAt      DateTime?
+
+  @@index([tenantId, ownerId])
+  @@index([tenantId, name])
+  @@map("accounts")
+}
+
+model Contact {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ownerId      String
+  owner        User     @relation("ContactOwner", fields: [ownerId], references: [id])
+  accountId    String?
+  account      Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  reportsToId  String?
+  reportsTo    Contact? @relation("ContactReports", fields: [reportsToId], references: [id])
+  reports      Contact[] @relation("ContactReports")
+
+  firstName    String?
+  lastName     String
+  title        String?
+  department   String?
+  email        String?
+  phone        String?
+  mobile       String?
+  fax          String?
+  birthday     DateTime?
+  description  String?  @db.Text
+  customFields Json     @default("{}")
+
+  mailingStreet     String?
+  mailingCity       String?
+  mailingState      String?
+  mailingPostalCode String?
+  mailingCountry    String?
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  createdById  String?
+  updatedById  String?
+  deletedAt    DateTime?
+
+  @@index([tenantId, accountId])
+  @@index([tenantId, email])
+  @@map("contacts")
+}
+
+model Opportunity {
+  id                String   @id @default(cuid())
+  tenantId          String
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ownerId           String
+  owner             User     @relation("OpportunityOwner", fields: [ownerId], references: [id])
+  accountId         String
+  account           Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  primaryContactId  String?
+
+  name              String
+  stage             String   @default("prospecting") // picklist
+  amount            Decimal? @db.Decimal(18, 2)
+  currencyCode      String   @default("CNY")
+  probability       Int      @default(10)          // 0-100
+  forecastCategory  String   @default("pipeline")  // pipeline/best_case/commit/closed
+  closeDate         DateTime
+  type              String?  // new_business/existing_business/renewal
+  leadSource        String?
+  nextStep          String?
+  description       String?  @db.Text
+  lossReason        String?
+
+  isClosed          Boolean  @default(false)
+  isWon             Boolean  @default(false)
+  customFields      Json     @default("{}")
+
+  lineItems         OpportunityLineItem[]
+  quotes            Quote[]
+  orders            Order[]
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  createdById       String?
+  updatedById       String?
+  deletedAt         DateTime?
+
+  @@index([tenantId, stage])
+  @@index([tenantId, ownerId])
+  @@index([tenantId, accountId])
+  @@index([tenantId, closeDate])
+  @@map("opportunities")
+}
+
+model Product {
+  id           String    @id @default(cuid())
+  tenantId     String
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  code         String    // SKU
+  name         String
+  family       String?
+  description  String?   @db.Text
+  isActive     Boolean   @default(true)
+  unit         String    @default("unit")
+  taxable      Boolean   @default(true)
+  customFields Json      @default("{}")
+
+  priceEntries    PriceBookEntry[]
+  oppLineItems    OpportunityLineItem[]
+  quoteLineItems  QuoteLineItem[]
+  orderLineItems  OrderLineItem[]
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@map("products")
+}
+
+model PriceBook {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  isStandard  Boolean  @default(false) // exactly one per tenant
+  isActive    Boolean  @default(true)
+  validFrom   DateTime?
+  validTo     DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  entries PriceBookEntry[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@map("price_books")
+}
+
+model PriceBookEntry {
+  id           String    @id @default(cuid())
+  priceBookId  String
+  priceBook    PriceBook @relation(fields: [priceBookId], references: [id], onDelete: Cascade)
+  productId    String
+  product      Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  unitPrice    Decimal   @db.Decimal(18, 4)
+  currencyCode String    @default("CNY")
+  isActive     Boolean   @default(true)
+
+  @@unique([priceBookId, productId, currencyCode])
+  @@map("price_book_entries")
+}
+
+model OpportunityLineItem {
+  id            String      @id @default(cuid())
+  opportunityId String
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  productId     String
+  product       Product     @relation(fields: [productId], references: [id])
+  quantity      Decimal     @db.Decimal(18, 4)
+  unitPrice     Decimal     @db.Decimal(18, 4)
+  discount      Decimal     @default(0) @db.Decimal(5, 2) // percent
+  subtotal      Decimal     @db.Decimal(18, 2)
+  description   String?
+  sortOrder     Int         @default(0)
+
+  @@index([opportunityId])
+  @@map("opportunity_line_items")
+}
+
+model Quote {
+  id               String    @id @default(cuid())
+  tenantId         String
+  tenant           Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ownerId          String
+  owner            User      @relation("QuoteOwner", fields: [ownerId], references: [id])
+  opportunityId    String?
+  opportunity      Opportunity? @relation(fields: [opportunityId], references: [id])
+  accountId        String?
+  account          Account?  @relation(fields: [accountId], references: [id])
+
+  quoteNumber      String    // e.g. Q-2026-00001
+  name             String
+  status           String    @default("draft") // draft/in_review/approved/presented/accepted/rejected/expired
+  currencyCode     String    @default("CNY")
+  expiresAt        DateTime?
+
+  subtotal         Decimal   @default(0) @db.Decimal(18, 2)
+  discountAmount   Decimal   @default(0) @db.Decimal(18, 2)
+  taxAmount        Decimal   @default(0) @db.Decimal(18, 2)
+  shippingAmount   Decimal   @default(0) @db.Decimal(18, 2)
+  grandTotal       Decimal   @default(0) @db.Decimal(18, 2)
+
+  billingStreet    String?
+  billingCity      String?
+  billingState     String?
+  billingPostalCode String?
+  billingCountry   String?
+  shippingStreet   String?
+  shippingCity     String?
+  shippingState    String?
+  shippingPostalCode String?
+  shippingCountry  String?
+
+  notes            String?  @db.Text
+  termsAndConditions String? @db.Text
+  customFields     Json     @default("{}")
+
+  lineItems        QuoteLineItem[]
+  orders           Order[]
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  createdById      String?
+  updatedById      String?
+  deletedAt        DateTime?
+
+  @@unique([tenantId, quoteNumber])
+  @@index([tenantId, status])
+  @@index([tenantId, opportunityId])
+  @@map("quotes")
+}
+
+model QuoteLineItem {
+  id          String  @id @default(cuid())
+  quoteId     String
+  quote       Quote   @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product @relation(fields: [productId], references: [id])
+  quantity    Decimal @db.Decimal(18, 4)
+  unitPrice   Decimal @db.Decimal(18, 4)
+  discount    Decimal @default(0) @db.Decimal(5, 2)
+  taxRate     Decimal @default(0) @db.Decimal(5, 2)
+  subtotal    Decimal @db.Decimal(18, 2)
+  description String?
+  sortOrder   Int     @default(0)
+
+  @@index([quoteId])
+  @@map("quote_line_items")
+}
+
+model Order {
+  id               String    @id @default(cuid())
+  tenantId         String
+  tenant           Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ownerId          String
+  owner            User      @relation("OrderOwner", fields: [ownerId], references: [id])
+  accountId        String
+  account          Account   @relation(fields: [accountId], references: [id])
+  opportunityId    String?
+  opportunity      Opportunity? @relation(fields: [opportunityId], references: [id])
+  quoteId          String?
+  quote            Quote?    @relation(fields: [quoteId], references: [id])
+  contractId       String?
+  contract         Contract? @relation(fields: [contractId], references: [id])
+
+  orderNumber      String
+  status           String    @default("draft") // draft/activated/shipped/delivered/cancelled
+  type             String?   // new/renewal/upgrade
+  effectiveDate    DateTime
+  endDate          DateTime?
+  poNumber         String?   // customer PO
+  currencyCode     String    @default("CNY")
+
+  subtotal         Decimal   @default(0) @db.Decimal(18, 2)
+  discountAmount   Decimal   @default(0) @db.Decimal(18, 2)
+  taxAmount        Decimal   @default(0) @db.Decimal(18, 2)
+  shippingAmount   Decimal   @default(0) @db.Decimal(18, 2)
+  grandTotal       Decimal   @default(0) @db.Decimal(18, 2)
+
+  billingStreet    String?
+  billingCity      String?
+  billingState     String?
+  billingPostalCode String?
+  billingCountry   String?
+  shippingStreet   String?
+  shippingCity     String?
+  shippingState    String?
+  shippingPostalCode String?
+  shippingCountry  String?
+
+  notes            String?   @db.Text
+  customFields     Json      @default("{}")
+
+  lineItems        OrderLineItem[]
+
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  createdById      String?
+  updatedById      String?
+  deletedAt        DateTime?
+
+  @@unique([tenantId, orderNumber])
+  @@index([tenantId, status])
+  @@index([tenantId, accountId])
+  @@map("orders")
+}
+
+model OrderLineItem {
+  id          String  @id @default(cuid())
+  orderId     String
+  order       Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product @relation(fields: [productId], references: [id])
+  quantity    Decimal @db.Decimal(18, 4)
+  unitPrice   Decimal @db.Decimal(18, 4)
+  discount    Decimal @default(0) @db.Decimal(5, 2)
+  taxRate     Decimal @default(0) @db.Decimal(5, 2)
+  subtotal    Decimal @db.Decimal(18, 2)
+  description String?
+  sortOrder   Int     @default(0)
+
+  @@index([orderId])
+  @@map("order_line_items")
+}
+
+model Contract {
+  id               String   @id @default(cuid())
+  tenantId         String
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  accountId        String
+  account          Account  @relation(fields: [accountId], references: [id])
+  contractNumber   String
+  name             String
+  status           String   @default("draft") // draft/in_approval/activated/expired/terminated
+  startDate        DateTime
+  endDate          DateTime
+  term             Int?     // months
+  contractValue    Decimal? @db.Decimal(18, 2)
+  currencyCode     String   @default("CNY")
+  billingFrequency String?  // monthly/quarterly/annual/one_time
+  paymentTerms     String?  // net_30 etc
+  description      String?  @db.Text
+  signedAt         DateTime?
+  signedBy         String?
+  customFields     Json     @default("{}")
+
+  orders           Order[]
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  createdById      String?
+  updatedById      String?
+  deletedAt        DateTime?
+
+  @@unique([tenantId, contractNumber])
+  @@index([tenantId, status])
+  @@map("contracts")
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// ACTIVITY (Task/Event/Call/Email) — polymorphic to any record
+// ════════════════════════════════════════════════════════════════════════════
+
+enum ActivityType {
+  TASK
+  EVENT
+  CALL
+  EMAIL
+  MEETING
+  NOTE_LOG
+}
+
+enum ActivityStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  DEFERRED
+  CANCELLED
+}
+
+model Activity {
+  id           String         @id @default(cuid())
+  tenantId     String
+  tenant       Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ownerId      String
+  owner        User           @relation("ActivityOwner", fields: [ownerId], references: [id])
+
+  type         ActivityType
+  subject      String
+  status       ActivityStatus @default(OPEN)
+  priority     String         @default("normal") // low/normal/high
+  dueDate      DateTime?
+  startAt      DateTime?
+  endAt        DateTime?
+  location     String?
+  description  String?        @db.Text
+
+  // polymorphic target
+  targetType   String?        // "lead" | "account" | "contact" | "opportunity" | ...
+  targetId     String?
+
+  completedAt  DateTime?
+  customFields Json           @default("{}")
+
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  createdById  String?
+  updatedById  String?
+  deletedAt    DateTime?
+
+  @@index([tenantId, ownerId, status])
+  @@index([tenantId, targetType, targetId])
+  @@index([tenantId, dueDate])
+  @@map("activities")
+}
+
+model Note {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  authorId   String
+  title      String?
+  body       String   @db.Text
+  targetType String
+  targetId   String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([tenantId, targetType, targetId])
+  @@map("notes")
+}
+
+model Attachment {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  uploaderId   String
+  filename     String
+  contentType  String
+  size         Int
+  url          String
+  targetType   String
+  targetId     String
+  createdAt    DateTime @default(now())
+
+  @@index([tenantId, targetType, targetId])
+  @@map("attachments")
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// EMAIL TEMPLATES
+// ════════════════════════════════════════════════════════════════════════════
+
+model EmailTemplate {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  subject     String
+  body        String   @db.Text
+  category    String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@map("email_templates")
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// PRICE RULES
+// ════════════════════════════════════════════════════════════════════════════
+
+model PriceRule {
+  id                  String   @id @default(cuid())
+  tenantId            String
+  name                String
+  description         String?
+  objectType          String   @default("Quote")  // Quote or Opportunity
+  discountThreshold   Decimal  @db.Decimal(5, 2)  // percent, e.g. 10.00 means >10% triggers
+  approvalProcessId   String?  // linked approval process
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  tenant              Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@map("price_rules")
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// WORKFLOW ENGINE
+// ════════════════════════════════════════════════════════════════════════════
+
+enum WorkflowTrigger {
+  ON_CREATE
+  ON_UPDATE
+  ON_FIELD_CHANGE
+  ON_DELETE
+  SCHEDULED
+  MANUAL
+}
+
+enum WorkflowStatus {
+  SUCCESS
+  PARTIAL
+  FAILED
+  SKIPPED
+}
+
+model WorkflowRule {
+  id              String          @id @default(cuid())
+  tenantId        String
+  tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name            String
+  description     String?
+  objectApiName   String          // e.g. "lead", "opportunity"
+  trigger         WorkflowTrigger
+  // for ON_FIELD_CHANGE: array of field api names
+  watchFields     String[]        @default([])
+  // JSON rule tree (see rule-engine package): { all: [...] } or { any: [...] }
+  conditions      Json            @default("{}")
+  // Array of action descriptors: { type, params }
+  actions         Json            @default("[]")
+  // for SCHEDULED: cron expression
+  cronExpr        String?
+  // run sync (in transaction) vs async (queued)
+  runSync         Boolean         @default(false)
+  priority        Int             @default(100) // lower runs first
+  isActive        Boolean         @default(true)
+  // re-entrancy guard
+  runOnceFlag     Boolean         @default(false)
+
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  createdById     String?
+  updatedById     String?
+
+  executions      WorkflowExecution[]
+
+  @@index([tenantId, objectApiName, isActive])
+  @@map("workflow_rules")
+}
+
+model WorkflowExecution {
+  id          String         @id @default(cuid())
+  ruleId      String
+  rule        WorkflowRule   @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  tenantId    String
+  recordType  String
+  recordId    String
+  trigger     WorkflowTrigger
+  status      WorkflowStatus
+  conditionsResult Boolean   @default(false)
+  actionsLog  Json           @default("[]")
+  error       String?        @db.Text
+  durationMs  Int?
+  startedAt   DateTime       @default(now())
+  finishedAt  DateTime?
+
+  @@index([tenantId, recordType, recordId])
+  @@index([ruleId, startedAt])
+  @@map("workflow_executions")
+}
+
+model ValidationRule {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name          String
+  description   String?
+  objectApiName String
+  // Rule that when evaluates TRUE, the save is BLOCKED (Salesforce semantics).
+  conditions    Json     @default("{}")
+  errorMessage  String
+  errorField    String?  // optional field to attach the error to
+  isActive      Boolean  @default(true)
+  priority      Int      @default(100)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([tenantId, objectApiName, isActive])
+  @@map("validation_rules")
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// APPROVAL PROCESSES
+// ════════════════════════════════════════════════════════════════════════════
+
+enum ApproverSource {
+  USER            // fixed user id
+  ROLE            // any user with role code
+  MANAGER         // submitter's manager chain
+  FIELD           // user id from a field on the record (e.g. account.ownerId.manager)
+  DYNAMIC         // resolved via rule/formula
+}
+
+enum ApprovalStepMode {
+  SEQUENTIAL      // one approver at a time; all must approve
+  PARALLEL_ALL    // everyone in parallel; all must approve
+  PARALLEL_ANY    // anyone can approve to advance
+}
+
+enum ApprovalRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  RECALLED
+}
+
+enum ApprovalActionType {
+  SUBMIT
+  APPROVE
+  REJECT
+  REASSIGN
+  RECALL
+  COMMENT
+}
+
+model ApprovalProcess {
+  id              String   @id @default(cuid())
+  tenantId        String
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name            String
+  description     String?
+  objectApiName   String
+  // Records matching entry criteria can be submitted for approval.
+  entryCriteria   Json     @default("{}")
+  // When approved, what to do (field updates etc). Same action schema as workflow.
+  finalApproveActions Json @default("[]")
+  finalRejectActions  Json @default("[]")
+  // On submit: lock the record? (blocks edits)
+  lockOnSubmit    Boolean  @default(true)
+  isActive        Boolean  @default(true)
+  priority        Int      @default(100)
+  version         Int      @default(1)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  steps    ApprovalStep[]
+  requests ApprovalRequest[]
+
+  @@index([tenantId, objectApiName, isActive])
+  @@map("approval_processes")
+}
+
+model ApprovalStep {
+  id             String           @id @default(cuid())
+  processId      String
+  process        ApprovalProcess  @relation(fields: [processId], references: [id], onDelete: Cascade)
+  order          Int
+  name           String
+  // condition to enter this step; null = always
+  entryCondition Json?
+  approverSource ApproverSource
+  approverConfig Json             // depends on source: { userId } | { roleCode } | { levels } | { fieldPath }
+  mode           ApprovalStepMode @default(SEQUENTIAL)
+  // if rejected at this step: restart, or final rejection
+  rejectBehavior String           @default("final_reject") // final_reject | restart | prev_step
+
+  @@unique([processId, order])
+  @@map("approval_steps")
+}
+
+model ApprovalRequest {
+  id               String                @id @default(cuid())
+  tenantId         String
+  processId        String
+  process          ApprovalProcess       @relation(fields: [processId], references: [id])
+  recordType       String
+  recordId         String
+  submitterId      String
+  status           ApprovalRequestStatus @default(PENDING)
+  currentStepId    String?
+  currentStepOrder Int?
+  // user ids awaiting action at current step (supports PARALLEL_ALL/ANY)
+  currentAssigneeIds String[]           @default([])
+  submittedAt      DateTime              @default(now())
+  finalizedAt      DateTime?
+  comments         String?               @db.Text
+
+  actions ApprovalAction[]
+
+  @@index([tenantId, recordType, recordId])
+  @@index([tenantId, status])
+  @@map("approval_requests")
+}
+
+model ApprovalAction {
+  id          String             @id @default(cuid())
+  requestId   String
+  request     ApprovalRequest    @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  stepOrder   Int?
+  actorId     String
+  actor       User               @relation(fields: [actorId], references: [id])
+  action      ApprovalActionType
+  comment     String?
+  metadata    Json               @default("{}")
+  createdAt   DateTime           @default(now())
+
+  @@index([requestId, createdAt])
+  @@map("approval_actions")
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// INFRA — audit, outbox, numbering
+// ════════════════════════════════════════════════════════════════════════════
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  actorId    String?
+  action     String   // "create" | "update" | "delete" | "convert" | ...
+  recordType String
+  recordId   String
+  changes    Json     @default("{}")   // { field: { from, to } }
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId, recordType, recordId])
+  @@index([tenantId, actorId, createdAt])
+  @@map("audit_logs")
+}
+
+model OutboxEvent {
+  id          String    @id @default(cuid())
+  tenantId    String
+  eventType   String    // "lead.created" | "opportunity.stage_changed" | ...
+  recordType  String
+  recordId    String
+  payload     Json
+  processedAt DateTime?
+  attempts    Int       @default(0)
+  lastError   String?
+  createdAt   DateTime  @default(now())
+
+  @@index([processedAt, createdAt])
+  @@index([tenantId, eventType])
+  @@map("outbox_events")
+}
+
+model SequenceCounter {
+  id       String @id @default(cuid())
+  tenantId String
+  key      String // e.g. "quote.2026", "order.2026"
+  value    Int    @default(0)
+
+  @@unique([tenantId, key])
+  @@map("sequence_counters")
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// HEADLESS CUSTOM OBJECT RECORDS
+// ════════════════════════════════════════════════════════════════════════════
+
+model CustomRecord {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  objectApiName String   // apiName of the ObjectDef
+  data          Json     @default("{}")
+  ownerId       String?
+  owner         User?    @relation("CustomRecordOwner", fields: [ownerId], references: [id])
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@index([tenantId, objectApiName])
+  @@index([tenantId, ownerId])
+  @@map("custom_records")
+}

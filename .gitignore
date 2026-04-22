@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+.next/
+.turbo/
+out/
+
+# Environment
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Logs
+*.log
+logs/
+api*.log
+crm*.log
+dev.log
+server.log
+
+# Database
+*.db
+*.sqlite
+
+# Prisma generated (keep schema, ignore migrations if not used)
+packages/db/prisma/migrations/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# GraphQL generated
+apps/api/src/schema.gql
+
+# Temp scripts
+check_data.js
+generate_*.js
