@@ -33,31 +33,21 @@ COPY apps/api              apps/api
 RUN pnpm --filter @tokenwave/db exec prisma generate
 RUN pnpm --filter @tokenwave/shared build \
  && pnpm --filter @tokenwave/rule-engine build \
- && pnpm --filter @tokenwave/api build \
- && echo "=== shared/dist ===" && ls -la /repo/packages/shared/dist || true \
- && echo "=== rule-engine/dist ===" && ls -la /repo/packages/rule-engine/dist || true \
- && echo "=== shared via pnpm ===" && pnpm --filter @tokenwave/shared exec sh -c 'pwd && ls -la dist' || true
-# Snapshot the built dist/ folders outside the workspace so the later
-# pnpm deploy step cannot touch them.
-RUN mkdir -p /built \
- && cp -a /repo/packages/shared/dist       /built/shared-dist \
- && cp -a /repo/packages/rule-engine/dist  /built/rule-engine-dist \
- && echo "--- built/shared-dist ---" && ls /built/shared-dist \
- && echo "--- built/rule-engine-dist ---" && ls /built/rule-engine-dist
+ && pnpm --filter @tokenwave/api build
 
 # Produce a slim deployable bundle with only prod deps + built workspace
-# packages resolved into real node_modules (no symlinks). pnpm deploy's
-# pack logic drops dist/*.js for these workspace packages in this monorepo
-# layout, so we overlay the real compiled artifacts afterward.
+# packages resolved into real node_modules (no symlinks). As defense in
+# depth, overlay the built dist/ folders over whatever pnpm deploy packs,
+# so a regression in pack behavior can't produce an unbootable image.
 RUN pnpm --filter @tokenwave/api --prod deploy /out \
  && mkdir -p /out/node_modules/@tokenwave/shared \
              /out/node_modules/@tokenwave/rule-engine \
  && rm -rf /out/node_modules/@tokenwave/shared/dist \
            /out/node_modules/@tokenwave/rule-engine/dist \
- && cp -a /built/shared-dist      /out/node_modules/@tokenwave/shared/dist \
- && cp -a /built/rule-engine-dist /out/node_modules/@tokenwave/rule-engine/dist \
- && echo "--- final shared/dist ---" && ls /out/node_modules/@tokenwave/shared/dist \
- && echo "--- final rule-engine/dist ---" && ls /out/node_modules/@tokenwave/rule-engine/dist
+ && cp -a /repo/packages/shared/dist \
+          /out/node_modules/@tokenwave/shared/dist \
+ && cp -a /repo/packages/rule-engine/dist \
+          /out/node_modules/@tokenwave/rule-engine/dist
 
 # ── Stage 3: runtime ───────────────────────────────────────────────────────
 FROM node:20-alpine AS runner

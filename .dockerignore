@@ -3,6 +3,9 @@
 **/dist
 **/.turbo
 **/.pnpm-store
+# tsc incremental cache — shipping a stale one makes tsc skip emitting
+# js/d.ts files when it runs inside the build image.
+**/*.tsbuildinfo
 .git
 .github
 .claude
