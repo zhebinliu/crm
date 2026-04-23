@@ -48,9 +48,8 @@ RUN pnpm --filter @tokenwave/api --prod deploy /out \
           /out/node_modules/@tokenwave/shared/dist \
  && cp -a /repo/packages/rule-engine/dist \
           /out/node_modules/@tokenwave/rule-engine/dist \
- && echo "=== locating generated prisma client ===" \
- && (find /repo -maxdepth 8 -type d -name ".prisma" 2>/dev/null; true) \
- && (find /repo -maxdepth 10 -type d -path "*@prisma/client" 2>/dev/null; true)
+ && cp -a /repo/node_modules/.pnpm/@prisma+client@5.22.0_prisma@5.22.0/node_modules/.prisma \
+          /out/node_modules/.prisma
 
 # ── Stage 3: runtime ───────────────────────────────────────────────────────
 FROM node:20-alpine AS runner
