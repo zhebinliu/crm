@@ -39,7 +39,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     if (token && !user) {
       setLoading(true);
       authApi.me()
-        .then((data) => setUser(data.user))
+        .then((data) => setUser(data.user ?? data))
         .catch(() => {
           localStorage.removeItem('tw_access_token');
           localStorage.removeItem('tw_refresh_token');

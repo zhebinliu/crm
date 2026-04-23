@@ -121,3 +121,46 @@
 - [x] 迁移 **商机 (Opportunities)** 列表页到 `DynamicRecordForm`
 - [x] 迁移 **报价单 (Quotes)** 列表页到 `DynamicRecordForm`
 - [x] 创建通用的 `CreateRecordModal` 组件，封装 Dialog + DynamicForm 逻辑。
+
+---
+
+## 第八轮：销售预测深度增强 - 已完成
+
+### 8.1 F1 — 月度统计 + 商机下钻
+- [x] 页头新增「季度 / 月度」时间维度切换
+- [x] 月度模式：按 3 个月分行展示 pipeline / best_case / commit / closed 金额
+- [x] 合计行：显示全季度汇总，与 4 个分类卡片数值一致
+- [x] 所有金额格子可点击，弹出 `OppDrawer` 展示构成商机
+- [x] 4 个预测类别卡片也支持点击触发 OppDrawer
+- [x] `OppDrawer`：右下角固定浮层，含商机列表 + 外链跳转
+
+### 8.2 F2 — 可配置预测类别映射
+- [x] 新增 `ForecastConfig` Prisma 模型（categories JSON + DB 持久化）
+- [x] 新增 `GET/PUT /api/forecasts/config` 端点
+- [x] 前端从 DB 动态加载 stageCategories，不再硬编码
+- [x] `buildTotals` 函数按 waterfall 逻辑累计（pipeline ⊇ best_case ⊇ commit ⊇ closed）
+- [x] `ForecastConfigModal` 弹窗：8 个阶段 × 5 个类别按钮，可视化切换并保存
+
+### 8.3 F3 — 自定义统计对象配置
+- [x] `ForecastConfig` 模型同时存储 objectApiName / amountField / dateField / stageField / ownerField
+- [x] `ForecastConfigModal`「数据对象配置」Tab：5 个输入框可编辑并保存
+- [x] 后端 upsertConfig 支持增量更新各字段
+
+### 8.4 F4 — 预测更新任务卡片
+- [x] 新增 `ForecastUpdateTask` + `ForecastUpdateEntry` Prisma 模型
+- [x] 新增 `POST /api/forecasts/update-tasks`：创建任务并快照目标商机
+- [x] 新增 `GET /api/forecasts/update-tasks`：经理看全部，销售只看分配给自己的
+- [x] 新增 `GET /api/forecasts/update-tasks/:id`：含商机条目
+- [x] 新增 `POST /api/forecasts/update-tasks/:id/submit`：提交后事务更新实际商机 amount / closeDate
+- [x] `UpdateTasksPanel` 组件：任务列表 + 可展开卡片
+- [x] `CreateTaskModal`：经理填写任务名/期间/截止/日期范围/目标成员
+- [x] `OppRow` 组件：每行显示上期快照 vs 本期输入 + ✅ noChange 按钮
+- [x] 提交成功后 TanStack Query 缓存失效刷新
+
+### 8.5 其他优化
+- [x] 去除 TanStack Query DevTools 徽标
+- [x] 去除 Next.js dev indicator
+- [x] 经理为团队成员设置季度配额（不再自助设置）
+- [x] 全页面 TypeScript 零报错
+- [x] Next.js 生产构建通过
+- [x] 端到端 API 测试全部通过（见 `docs/测试报告-销售预测增强.md`）

@@ -34,8 +34,10 @@ export class ListOpportunitiesQuery {
   @IsOptional() @IsString() ownerId?: string;
   @IsOptional() @IsString() accountId?: string;
   @IsOptional() @IsString() forecastCategory?: string;
+  @IsOptional() @IsString() closeDateFrom?: string;
+  @IsOptional() @IsString() closeDateTo?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) skip?: number = 0;
-  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) take?: number = 20;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(500) take?: number = 20;
 }
 
 export class CreateOpportunityDto {

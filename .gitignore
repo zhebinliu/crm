@@ -35,6 +35,9 @@ packages/db/prisma/migrations/
 *.swp
 *.swo
 
+# Claude Code worktree metadata
+.claude/
+
 # OS
 .DS_Store
 Thumbs.db

@@ -109,7 +109,7 @@ async function main() {
   console.log('✓ Users: admin@demo.com / manager@demo.com / rep@demo.com (pw: Admin@1234)');
 
   // ── Standard Objects & Fields ────────────────────────────────────────
-  const OBJECT_FIELDS: Record<string, Array<{ apiName: string; label: string; type: string; required?: boolean; picklistId?: string }>> = {
+  const OBJECT_FIELDS: Record<string, Array<{ apiName: string; label: string; type: string; required?: boolean; picklistId?: string; referenceTo?: string }>> = {
     lead: [
       { apiName: 'lastName', label: '姓名 (LastName)', type: 'STRING', required: true },
       { apiName: 'firstName', label: '名 (FirstName)', type: 'STRING' },
@@ -261,6 +261,9 @@ async function main() {
       await prisma.fieldDef.upsert({
         where: { objectId_apiName: { objectId: obj.id, apiName: field.apiName } },
         update: {},
+        update: {
+          referenceTo: field.referenceTo ?? null,
+        },
         create: {
           tenantId: tenant.id,
           objectId: obj.id,
@@ -270,6 +273,7 @@ async function main() {
           required: field.required || false,
           isStandard: true,
           displayOrder: order++,
+          referenceTo: field.referenceTo ?? null,
         },
       });
     }
@@ -506,6 +510,137 @@ async function main() {
     },
   });
   console.log('✓ Approval process: 报价单审批');
+
+  // ── Additional Accounts ────────────────────────────────────────────────────
+  const account2 = await prisma.account.upsert({
+    where: { id: 'demo-account-2' },
+    update: {},
+    create: {
+      id: 'demo-account-2',
+      tenantId: tenant.id,
+      ownerId: managerUser.id,
+      name: '上海数字科技集团',
+      type: 'customer',
+      industry: 'technology',
+      annualRevenue: 120000000,
+      employeeCount: 500,
+      createdById: adminUser.id,
+    },
+  });
+
+  const account3 = await prisma.account.upsert({
+    where: { id: 'demo-account-3' },
+    update: {},
+    create: {
+      id: 'demo-account-3',
+      tenantId: tenant.id,
+      ownerId: repUser.id,
+      name: '广州云计算有限公司',
+      type: 'customer',
+      industry: 'technology',
+      annualRevenue: 80000000,
+      employeeCount: 350,
+      createdById: adminUser.id,
+    },
+  });
+
+  const account4 = await prisma.account.upsert({
+    where: { id: 'demo-account-4' },
+    update: {},
+    create: {
+      id: 'demo-account-4',
+      tenantId: tenant.id,
+      ownerId: adminUser.id,
+      name: '深圳智能制造股份公司',
+      type: 'prospect',
+      industry: 'manufacturing',
+      annualRevenue: 300000000,
+      employeeCount: 1200,
+      createdById: adminUser.id,
+    },
+  });
+  console.log('✓ Additional accounts: 3');
+
+  // ── Rich Opportunities (Q2 2026) ──────────────────────────────────────────
+  // Q2 2026 = 2026-04-01 ~ 2026-06-30
+  type OppSeed = {
+    id: string; name: string; accountId: string; ownerId: string;
+    stage: string; amount: number; probability: number; forecastCategory: string;
+    closeDate: Date; isClosed: boolean; isWon: boolean;
+  };
+
+  const PROB: Record<string, number> = {
+    prospecting: 10, qualification: 20, needs_analysis: 30,
+    value_proposition: 50, proposal: 65, negotiation: 80,
+    closed_won: 100, closed_lost: 0,
+  };
+  const FCAT: Record<string, string> = {
+    prospecting: 'pipeline', qualification: 'pipeline', needs_analysis: 'pipeline',
+    value_proposition: 'best_case', proposal: 'best_case', negotiation: 'commit',
+    closed_won: 'closed', closed_lost: 'omitted',
+  };
+
+  const oppSeeds: Array<{ id: string; name: string; accountId: string; ownerId: string; stage: string; amount: number; closeDate: Date }> = [
+    { id: 'demo-opp-2', name: '上海数字科技 CRM专业版订购', accountId: account2.id, ownerId: managerUser.id, stage: 'negotiation',       amount: 1260000, closeDate: new Date('2026-04-30') },
+    { id: 'demo-opp-3', name: '广州云计算 平台迁移实施',     accountId: account3.id, ownerId: repUser.id,     stage: 'closed_won',        amount: 245000,  closeDate: new Date('2026-04-05') },
+    { id: 'demo-opp-4', name: '深圳智能制造 企业版全量部署', accountId: account4.id, ownerId: adminUser.id,   stage: 'negotiation',       amount: 980000,  closeDate: new Date('2026-05-10') },
+    { id: 'demo-opp-5', name: '某投资集团 CRM续约项目',      accountId: account2.id, ownerId: adminUser.id,   stage: 'proposal',          amount: 560000,  closeDate: new Date('2026-06-15') },
+    { id: 'demo-opp-6', name: '某医疗集团 新系统实施',        accountId: account3.id, ownerId: repUser.id,     stage: 'value_proposition', amount: 320000,  closeDate: new Date('2026-06-30') },
+    { id: 'demo-opp-7', name: '某零售连锁 销售自动化平台',    accountId: account4.id, ownerId: managerUser.id, stage: 'qualification',     amount: 180000,  closeDate: new Date('2026-06-25') },
+    { id: 'demo-opp-8', name: '某教育机构 学员管理系统',      accountId: account3.id, ownerId: repUser.id,     stage: 'prospecting',       amount: 120000,  closeDate: new Date('2026-06-20') },
+    { id: 'demo-opp-9', name: '某制造集团 供应链CRM大单',    accountId: account4.id, ownerId: managerUser.id, stage: 'closed_won',        amount: 1580000, closeDate: new Date('2026-04-08') },
+    { id: 'demo-opp-10', name: '某物流公司 运营管理CRM',     accountId: account2.id, ownerId: adminUser.id,   stage: 'needs_analysis',    amount: 450000,  closeDate: new Date('2026-06-28') },
+    { id: 'demo-opp-11', name: '某传媒集团 线上平台对接',     accountId: account3.id, ownerId: repUser.id,     stage: 'closed_lost',       amount: 280000,  closeDate: new Date('2026-04-20') },
+    { id: 'demo-opp-12', name: '某科技公司 年度续约谈判',    accountId: account2.id, ownerId: managerUser.id, stage: 'negotiation',       amount: 760000,  closeDate: new Date('2026-05-20') },
+    { id: 'demo-opp-13', name: '某投资机构 智能分析模块',    accountId: account4.id, ownerId: adminUser.id,   stage: 'proposal',          amount: 890000,  closeDate: new Date('2026-06-05') },
+    { id: 'demo-opp-14', name: '某建材公司 销售团队管理',    accountId: account3.id, ownerId: repUser.id,     stage: 'qualification',     amount: 300000,  closeDate: new Date('2026-05-15') },
+    { id: 'demo-opp-15', name: '某航空公司 客服CRM系统',     accountId: account2.id, ownerId: managerUser.id, stage: 'needs_analysis',    amount: 650000,  closeDate: new Date('2026-06-10') },
+    { id: 'demo-opp-16', name: '某银行 客户关系管理平台',    accountId: account4.id, ownerId: adminUser.id,   stage: 'value_proposition', amount: 1200000, closeDate: new Date('2026-05-25') },
+  ];
+
+  for (const o of oppSeeds) {
+    const isClosed = o.stage === 'closed_won' || o.stage === 'closed_lost';
+    await prisma.opportunity.upsert({
+      where: { id: o.id },
+      update: {},
+      create: {
+        id: o.id,
+        tenantId: tenant.id,
+        ownerId: o.ownerId,
+        accountId: o.accountId,
+        name: o.name,
+        stage: o.stage,
+        amount: o.amount,
+        currencyCode: 'CNY',
+        probability: PROB[o.stage] ?? 10,
+        forecastCategory: FCAT[o.stage] ?? 'pipeline',
+        isClosed,
+        isWon: o.stage === 'closed_won',
+        closeDate: o.closeDate,
+        createdById: adminUser.id,
+      },
+    });
+  }
+  console.log(`✓ Opportunities: ${oppSeeds.length + 1} total (Q2 2026)`);
+
+  // ── Forecast Targets (quotas per user per quarter) ─────────────────────────
+  const ftSeeds = [
+    { userId: adminUser.id,   period: '2026-Q2', quota: 3000000 },
+    { userId: managerUser.id, period: '2026-Q2', quota: 4000000 },
+    { userId: repUser.id,     period: '2026-Q2', quota: 1500000 },
+    { userId: adminUser.id,   period: '2026-Q1', quota: 2500000 },
+    { userId: managerUser.id, period: '2026-Q1', quota: 3500000 },
+    { userId: repUser.id,     period: '2026-Q1', quota: 1200000 },
+  ];
+
+  for (const ft of ftSeeds) {
+    await prisma.forecastTarget.upsert({
+      where: { tenantId_userId_period: { tenantId: tenant.id, userId: ft.userId, period: ft.period } },
+      update: { quota: ft.quota },
+      create: { tenantId: tenant.id, userId: ft.userId, period: ft.period, quota: ft.quota },
+    });
+  }
+  console.log(`✓ Forecast targets: ${ftSeeds.length}`);
 
   console.log('\n✅ Seed complete!');
   console.log('   Login: admin@demo.com / Admin@1234 (tenant: demo)');

@@ -164,6 +164,30 @@ export const adminApi = {
   getLayout: (name: string) => api.get(`/admin/metadata/objects/${name}/layout`).then((r) => r.data),
 };
 
+export const forecastApi = {
+  // Targets
+  getTarget: (period: string, userId?: string) =>
+    api.get('/forecasts/targets', { params: { period, userId } }).then((r) => r.data),
+  upsertTarget: (period: string, quota: number, userId?: string) =>
+    api.put('/forecasts/targets', { period, quota, userId }).then((r) => r.data),
+  teamTargets: (period: string) =>
+    api.get('/forecasts/targets/team', { params: { period } }).then((r) => r.data),
+  // Config (F2 + F3)
+  getConfig: () =>
+    api.get('/forecasts/config').then((r) => r.data),
+  upsertConfig: (d: Record<string, unknown>) =>
+    api.put('/forecasts/config', d).then((r) => r.data),
+  // Update tasks (F4)
+  createTask: (d: unknown) =>
+    api.post('/forecasts/update-tasks', d).then((r) => r.data),
+  listTasks: () =>
+    api.get('/forecasts/update-tasks').then((r) => r.data),
+  getTask: (id: string) =>
+    api.get(`/forecasts/update-tasks/${id}`).then((r) => r.data),
+  submitTask: (id: string, entries: unknown[]) =>
+    api.post(`/forecasts/update-tasks/${id}/submit`, { entries }).then((r) => r.data),
+};
+
 export const emailTemplatesApi = {
   list: (p?: Record<string, unknown>) => api.get('/admin/email-templates', { params: p }).then((r) => r.data),
   get: (id: string) => api.get(`/admin/email-templates/${id}`).then((r) => r.data),

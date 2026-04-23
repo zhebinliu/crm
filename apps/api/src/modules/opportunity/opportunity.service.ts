@@ -17,6 +17,8 @@ export interface OppListOptions {
   ownerId?: string;
   accountId?: string;
   forecastCategory?: string;
+  closeDateFrom?: string;
+  closeDateTo?: string;
   skip?: number;
   take?: number;
 }
@@ -43,7 +45,11 @@ export class OpportunityService extends BaseEntityService {
   }
 
   async list(tenantId: string, opts: OppListOptions = {}) {
-    const { search, stage, ownerId, accountId, forecastCategory, skip = 0, take = 20 } = opts;
+    const { search, stage, ownerId, accountId, forecastCategory, closeDateFrom, closeDateTo, skip = 0, take = 20 } = opts;
+
+    const closeDateFilter: Record<string, Date> = {};
+    if (closeDateFrom) closeDateFilter.gte = new Date(closeDateFrom);
+    if (closeDateTo)   closeDateFilter.lte = new Date(closeDateTo);
 
     const where = {
       tenantId,
@@ -52,6 +58,7 @@ export class OpportunityService extends BaseEntityService {
       ...(ownerId ? { ownerId } : {}),
       ...(accountId ? { accountId } : {}),
       ...(forecastCategory ? { forecastCategory } : {}),
+      ...(Object.keys(closeDateFilter).length ? { closeDate: closeDateFilter } : {}),
       ...(search
         ? { name: { contains: search, mode: 'insensitive' as const } }
         : {}),
