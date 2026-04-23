@@ -11,7 +11,7 @@ ENV PATH=$PNPM_HOME:$PATH
 RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
 WORKDIR /repo
 
-# ── Stage 1: install ───────────────────────────────────────────────────────
+# ── Stage 1: install full workspace deps (incl. dev, for build tools) ──────
 FROM base AS deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 COPY apps/web/package.json              apps/web/package.json
@@ -28,20 +28,17 @@ COPY packages/shared       packages/shared
 COPY packages/rule-engine  packages/rule-engine
 COPY packages/db           packages/db
 COPY apps/api              apps/api
-# Generate Prisma client then build workspace packages + api.
-# NB: @tokenwave/db has no runtime consumers (api imports @prisma/client
-#     directly), so we skip its tsc build (which is broken by seed.ts being
-#     outside rootDir). The prisma client is generated above.
+# @tokenwave/db has no runtime consumer in apps/api (api imports
+# @prisma/client directly) — we only need prisma generate, not tsc build.
 RUN pnpm --filter @tokenwave/db exec prisma generate
 RUN pnpm --filter @tokenwave/shared build \
  && pnpm --filter @tokenwave/rule-engine build \
  && pnpm --filter @tokenwave/api build
+# Produce a slim deployable bundle with only prod deps + built workspace
+# packages resolved into real node_modules (no symlinks).
+RUN pnpm --filter @tokenwave/api --prod deploy /out
 
 # ── Stage 3: runtime ───────────────────────────────────────────────────────
-# We keep dev deps to ensure the generated Prisma client (inside
-# packages/db/node_modules) and nest runtime helpers resolve cleanly. The
-# image is still compact (~400–600 MB) because dist/ is pre-built and no
-# source/build step is re-run here.
 FROM node:20-alpine AS runner
 RUN apk add --no-cache libc6-compat openssl tini
 WORKDIR /app
@@ -51,12 +48,11 @@ ENV API_PORT=3001
 
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nestjs
 
-# Copy the fully built monorepo (node_modules included) so workspace
-# resolution "just works" at runtime without another install step.
-COPY --from=builder --chown=nestjs:nodejs /repo /app
+# Deployed bundle: /out/{package.json, node_modules, dist, ...}
+COPY --from=builder --chown=nestjs:nodejs /out /app
 
 USER nestjs
 EXPOSE 3001
 
 ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["node", "apps/api/dist/main.js"]
+CMD ["node", "dist/main.js"]
