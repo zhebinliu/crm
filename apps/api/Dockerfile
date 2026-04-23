@@ -28,11 +28,13 @@ COPY packages/shared       packages/shared
 COPY packages/rule-engine  packages/rule-engine
 COPY packages/db           packages/db
 COPY apps/api              apps/api
-# Generate Prisma client then build workspace packages + api
+# Generate Prisma client then build workspace packages + api.
+# NB: @tokenwave/db has no runtime consumers (api imports @prisma/client
+#     directly), so we skip its tsc build (which is broken by seed.ts being
+#     outside rootDir). The prisma client is generated above.
 RUN pnpm --filter @tokenwave/db exec prisma generate
 RUN pnpm --filter @tokenwave/shared build \
  && pnpm --filter @tokenwave/rule-engine build \
- && pnpm --filter @tokenwave/db build \
  && pnpm --filter @tokenwave/api build
 
 # ── Stage 3: runtime ───────────────────────────────────────────────────────
