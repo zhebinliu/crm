@@ -36,7 +36,23 @@ RUN pnpm --filter @tokenwave/shared build \
  && pnpm --filter @tokenwave/api build
 # Produce a slim deployable bundle with only prod deps + built workspace
 # packages resolved into real node_modules (no symlinks).
-RUN pnpm --filter @tokenwave/api --prod deploy /out
+#
+# pnpm deploy packs workspace packages using npm-pack rules, which in this
+# monorepo drop dist/*.js from @tokenwave/shared and @tokenwave/rule-engine
+# (root .gitignore + default pack behavior). After the deploy we overlay
+# the real compiled artifacts from the builder's filesystem so the api can
+# resolve `@tokenwave/shared` and `@tokenwave/rule-engine` at runtime.
+RUN pnpm --filter @tokenwave/api --prod deploy /out \
+ && mkdir -p /out/node_modules/@tokenwave/shared \
+             /out/node_modules/@tokenwave/rule-engine \
+ && rm -rf /out/node_modules/@tokenwave/shared/dist \
+           /out/node_modules/@tokenwave/rule-engine/dist \
+ && cp -a /repo/packages/shared/dist \
+          /out/node_modules/@tokenwave/shared/dist \
+ && cp -a /repo/packages/rule-engine/dist \
+          /out/node_modules/@tokenwave/rule-engine/dist \
+ && echo "--- shared/dist ---" && ls /out/node_modules/@tokenwave/shared/dist \
+ && echo "--- rule-engine/dist ---" && ls /out/node_modules/@tokenwave/rule-engine/dist
 
 # ── Stage 3: runtime ───────────────────────────────────────────────────────
 FROM node:20-alpine AS runner
