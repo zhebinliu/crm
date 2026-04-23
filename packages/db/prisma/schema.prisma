@@ -53,6 +53,9 @@ model Tenant {
   customRecords      CustomRecord[]
   emailTemplates     EmailTemplate[]
   priceRules         PriceRule[]
+  forecastTargets     ForecastTarget[]
+  forecastConfig      ForecastConfig?
+  forecastUpdateTasks ForecastUpdateTask[]
 
   @@map("tenants")
 }
@@ -95,6 +98,9 @@ model User {
   ownedActivities  Activity[]     @relation("ActivityOwner")
   approvalActions  ApprovalAction[]
   ownedCustoms     CustomRecord[] @relation("CustomRecordOwner")
+  forecastTargets       ForecastTarget[]
+  createdForecastTasks  ForecastUpdateTask[]  @relation("ForecastTaskCreator")
+  forecastUpdateEntries ForecastUpdateEntry[] @relation("ForecastEntryUser")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -489,6 +495,83 @@ model Opportunity {
   @@index([tenantId, accountId])
   @@index([tenantId, closeDate])
   @@map("opportunities")
+}
+
+model ForecastTarget {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  period    String   // "2026-Q2"
+  quota     Decimal  @default(0) @db.Decimal(18, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, userId, period])
+  @@index([tenantId, period])
+  @@map("forecast_targets")
+}
+
+model ForecastConfig {
+  id            String   @id @default(cuid())
+  tenantId      String   @unique
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // F2: stage→category mapping JSON { "prospecting": "pipeline", ... }
+  categories    Json     @default("{}")
+  // F3: custom object for forecast data source
+  objectApiName String   @default("opportunity")
+  amountField   String   @default("amount")
+  dateField     String   @default("closeDate")
+  stageField    String   @default("stage")
+  ownerField    String   @default("ownerId")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("forecast_configs")
+}
+
+model ForecastUpdateTask {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdById   String
+  createdBy     User     @relation("ForecastTaskCreator", fields: [createdById], references: [id])
+  period        String   // "2026-Q2"
+  title         String
+  dueDate       DateTime
+  targetUserIds Json     @default("[]")  // string[]
+  dateRangeFrom DateTime
+  dateRangeTo   DateTime
+  status        String   @default("open") // open | closed
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  entries ForecastUpdateEntry[]
+
+  @@index([tenantId, period])
+  @@index([tenantId, status])
+  @@map("forecast_update_tasks")
+}
+
+model ForecastUpdateEntry {
+  id            String             @id @default(cuid())
+  taskId        String
+  task          ForecastUpdateTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User               @relation("ForecastEntryUser", fields: [userId], references: [id])
+  oppId         String
+  oppName       String
+  prevAmount    Decimal?           @db.Decimal(18, 2)
+  prevCloseDate DateTime?
+  newAmount     Decimal?           @db.Decimal(18, 2)
+  newCloseDate  DateTime?
+  noChange      Boolean            @default(false)
+  submittedAt   DateTime?
+
+  @@unique([taskId, userId, oppId])
+  @@index([taskId, userId])
+  @@map("forecast_update_entries")
 }
 
 model Product {

@@ -1,0 +1,87 @@
+# Tokenwave CRM — production stack
+# Runs on the same host as kb-system; all ports are bound to 127.0.0.1 only.
+# External HTTPS is terminated by the kb-system-frontend-1 nginx container,
+# which reverse-proxies crm.tokenwave.cloud to 127.0.0.1:3000 / :3001.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: tokenwave-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tokenwave}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tokenwave}
+      POSTGRES_DB: ${POSTGRES_DB:-tokenwave_crm}
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tokenwave} -d ${POSTGRES_DB:-tokenwave_crm}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    container_name: tokenwave-redis
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6380:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    image: tokenwave-api:latest
+    container_name: tokenwave-api
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-tokenwave}:${POSTGRES_PASSWORD:-tokenwave}@postgres:5432/${POSTGRES_DB:-tokenwave_crm}
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-${JWT_SECRET}}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      API_HOST: 0.0.0.0
+      API_PORT: 3001
+      API_CORS_ORIGINS: ${API_CORS_ORIGINS:-https://crm.tokenwave.cloud}
+    ports:
+      - "127.0.0.1:3001:3001"
+    mem_limit: 768m
+
+  web:
+    image: tokenwave-web:latest
+    container_name: tokenwave-web
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://crm.tokenwave.cloud}
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://crm.tokenwave.cloud}
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+    ports:
+      - "127.0.0.1:3000:3000"
+    mem_limit: 512m
+
+volumes:
+  postgres_data:
+  redis_data:

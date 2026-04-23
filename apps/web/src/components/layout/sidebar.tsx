@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, Building2, UserCheck, TrendingUp,
   FileText, ShoppingCart, ScrollText, Settings,
-  LogOut, Box, Sparkles, ChevronRight, UserPlus, CalendarCheck, BarChart3, PanelLeftClose, ChevronLeft,
+  LogOut, Box, Sparkles, ChevronRight, UserPlus, CalendarCheck, BarChart3, PanelLeftClose, ChevronLeft, BarChart2,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth';
 import { useRouter } from 'next/navigation';
@@ -126,6 +126,7 @@ export function Sidebar() {
               {/* Main Group */}
               <NavGroup label="核心工作区" groupKey="core" collapsedGroups={collapsedGroups} onToggle={toggleGroup}>
                 <NavLink item={{ label: '控制台主页', href: '/dashboard', icon: <LayoutDashboard size={18} /> }} pathname={pathname} />
+                <NavLink item={{ label: '销售预测', href: '/forecasts', icon: <BarChart2 size={18} /> }} pathname={pathname} />
                 <NavLink item={{ label: '报表与分析', href: '/reports', icon: <BarChart3 size={18} /> }} pathname={pathname} />
               </NavGroup>
 
@@ -159,6 +160,15 @@ export function Sidebar() {
                   </Link>
                 </TooltipTrigger>
                 <TooltipContent side="right">控制台主页</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Link href="/forecasts" className={cn('flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-200',
+                    pathname === '/forecasts' ? 'bg-brand/5 text-brand' : 'text-slate-400 hover:bg-slate-50 hover:text-brand')}>
+                    <BarChart2 size={18} />
+                  </Link>
+                </TooltipTrigger>
+                <TooltipContent side="right">销售预测</TooltipContent>
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
