@@ -88,6 +88,7 @@ export class AiChatService {
   async chat(args: {
     tenantId: string;
     userId: string;
+    permissions: string[];
     history: ChatMessage[];
     message: string;
   }): Promise<ChatResponse> {
@@ -96,6 +97,7 @@ export class AiChatService {
     const ctx: CopilotContext = {
       tenantId: args.tenantId,
       userId: args.userId,
+      permissions: args.permissions,
       prisma: this.prisma,
       ai: this.ai,
     };
@@ -241,4 +243,143 @@ export class AiChatService {
       },
     };
   }
+
+  // ── Streaming variant ────────────────────────────────────────────────────
+  // Same orchestration as chat() but calls back into the supplied emit()
+  // function as events occur. The HTTP layer wraps emit() into SSE writes.
+
+  async chatStream(
+    args: {
+      tenantId: string;
+      userId: string;
+      permissions: string[];
+      history: ChatMessage[];
+      message: string;
+    },
+    emit: (event: ChatStreamEvent) => void,
+  ): Promise<void> {
+    const t0 = Date.now();
+    const ctx: CopilotContext = {
+      tenantId: args.tenantId,
+      userId: args.userId,
+      permissions: args.permissions,
+      prisma: this.prisma,
+      ai: this.ai,
+    };
+
+    const turns: ChatTurn[] = [
+      ...args.history.map((m): ChatTurn => ({ role: m.role, content: m.text })),
+      { role: 'user', content: args.message },
+    ];
+    const toolEvents: NonNullable<ChatMessage['toolEvents']> = [];
+
+    let finalText = '';
+    let iterations = 0;
+    let modelName = '';
+    let source: 'live' | 'stub' = 'live';
+    const totalUsage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
+
+    try {
+      while (iterations < MAX_ITERATIONS) {
+        iterations += 1;
+
+        const step = await this.claude.chatStepStream({
+          system: COPILOT_SYSTEM_PROMPT,
+          history: turns,
+          tools: COPILOT_TOOLS.map((t) => ({
+            name: t.name, description: t.description, input_schema: t.input_schema,
+          })),
+          maxTokens: 1500,
+        }, (delta) => emit({ type: 'token', text: delta }));
+
+        modelName = step.modelName;
+        source = step.source;
+        totalUsage.inputTokens += step.usage.inputTokens;
+        totalUsage.outputTokens += step.usage.outputTokens;
+        totalUsage.cacheReadTokens += step.usage.cacheReadTokens;
+        totalUsage.cacheWriteTokens += step.usage.cacheWriteTokens;
+
+        turns.push({ role: 'assistant', content: step.blocks });
+
+        if (step.toolUses.length === 0) {
+          finalText = step.text || '(未返回内容)';
+          break;
+        }
+
+        // Inform the client text from this round is finished and tools are running.
+        emit({ type: 'turn_break' });
+
+        const resultBlocks: ChatBlock[] = [];
+        for (const call of step.toolUses) {
+          emit({ type: 'tool_call_start', name: call.name, input: call.input });
+          const tool = COPILOT_TOOL_BY_NAME.get(call.name);
+          const callT0 = Date.now();
+          if (!tool) {
+            const errMsg = `Unknown tool: ${call.name}`;
+            resultBlocks.push({ type: 'tool_result', tool_use_id: call.id, content: errMsg, is_error: true });
+            toolEvents.push({ name: call.name, input: call.input, result: errMsg, isError: true, durationMs: Date.now() - callT0 });
+            emit({ type: 'tool_call_end', name: call.name, durationMs: Date.now() - callT0, isError: true });
+            continue;
+          }
+          try {
+            const result = await tool.handler((call.input as Record<string, unknown>) ?? {}, ctx);
+            const serialized = JSON.stringify(result);
+            const trimmed = serialized.length > 8_000 ? serialized.slice(0, 8_000) + '…(已截断)' : serialized;
+            resultBlocks.push({ type: 'tool_result', tool_use_id: call.id, content: serialized });
+            toolEvents.push({ name: call.name, input: call.input, result: trimmed, durationMs: Date.now() - callT0 });
+            emit({ type: 'tool_call_end', name: call.name, durationMs: Date.now() - callT0 });
+          } catch (e) {
+            const msg = (e as Error).message ?? String(e);
+            this.logger.warn(`tool ${call.name} failed: ${msg}`);
+            resultBlocks.push({ type: 'tool_result', tool_use_id: call.id, content: msg, is_error: true });
+            toolEvents.push({ name: call.name, input: call.input, result: msg, isError: true, durationMs: Date.now() - callT0 });
+            emit({ type: 'tool_call_end', name: call.name, durationMs: Date.now() - callT0, isError: true });
+          }
+        }
+
+        turns.push({ role: 'user', content: resultBlocks });
+      }
+
+      if (iterations >= MAX_ITERATIONS && !finalText) {
+        finalText = '⚠️ 我反复调用工具但没能给出最终答复，请换一种问法或简化问题。';
+        emit({ type: 'token', text: finalText });
+      }
+
+      const assistant: ChatMessage = {
+        role: 'assistant',
+        text: finalText,
+        toolEvents: toolEvents.length > 0 ? toolEvents : undefined,
+      };
+      const history: ChatMessage[] = [
+        ...args.history,
+        { role: 'user', text: args.message },
+        assistant,
+      ];
+
+      emit({
+        type: 'done',
+        assistant,
+        history,
+        meta: {
+          modelName,
+          source,
+          totalLatencyMs: Date.now() - t0,
+          iterations,
+          ...totalUsage,
+        },
+      });
+    } catch (err) {
+      emit({ type: 'error', message: (err as Error).message ?? String(err) });
+    }
+  }
 }
+
+// ── Stream event union (server → client over SSE) ─────────────────────────
+
+export type ChatStreamEvent =
+  | { type: 'token'; text: string }
+  | { type: 'turn_break' }
+  | { type: 'tool_call_start'; name: string; input: unknown }
+  | { type: 'tool_call_end'; name: string; durationMs: number; isError?: boolean }
+  | { type: 'done'; assistant: ChatMessage; history: ChatMessage[]; meta: ChatResponse['meta'] }
+  | { type: 'error'; message: string };

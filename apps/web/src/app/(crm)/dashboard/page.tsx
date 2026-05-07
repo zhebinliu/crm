@@ -11,6 +11,7 @@ import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { DashboardAIBanner } from '@/components/ai/dashboard-ai-banner';
 
 export default function DashboardPage() {
   const { data: opps } = useQuery({ queryKey: ['opps-dashboard'], queryFn: () => oppsApi.list({ take: 50 }) });
@@ -58,6 +59,9 @@ export default function DashboardPage() {
           </Link>
         </div>
       </div>
+
+      {/* AI Banner — surfaces high-risk opps from anomaly scan */}
+      <DashboardAIBanner />
 
       {/* KPI Grid — 4 primary + 4 secondary */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">

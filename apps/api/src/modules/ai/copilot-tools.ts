@@ -11,12 +11,20 @@
 
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { AiService } from './ai.service';
+import { hasPermission, type PermissionCode } from '@tokenwave/shared';
 
 export interface CopilotContext {
   tenantId: string;
   userId: string;
+  /** Flattened permission codes (e.g. ["lead.read", "opportunity.write", ...]). */
+  permissions: string[];
   prisma: PrismaService;
   ai: AiService;
+}
+
+function requirePerm(ctx: CopilotContext, code: PermissionCode): { ok: true } | { ok: false; reason: string } {
+  if (hasPermission(ctx.permissions, code)) return { ok: true };
+  return { ok: false, reason: `权限不足：缺少 ${code}` };
 }
 
 export interface ToolDefinition {
@@ -426,6 +434,132 @@ const listStalledOpportunities: ToolDefinition = {
   },
 };
 
+// ── Tool: create_followup_task (WRITE) ────────────────────────────────────
+//
+// Closes the "AI suggests → AI does" loop. The LLM picks this tool when the
+// user says e.g. "帮我建一个明天联系客户的 task" or "把这个 deal 加个跟进".
+// Permission-gated by activity.write.
+
+const createFollowupTask: ToolDefinition = {
+  name: 'create_followup_task',
+  description: '在 CRM 中创建一条跟进任务 (Activity, type=TASK)。任务由当前用户负责。' +
+    '当用户明确请求"建一个任务"、"加个待办"、"帮我安排跟进"时使用。' +
+    '不要主动创建 — 必须用户先表达意图。',
+  input_schema: {
+    type: 'object',
+    properties: {
+      subject:    { type: 'string', description: '任务标题，简洁动词开头，≤30 字。' },
+      targetType: { type: 'string', enum: ['opportunity', 'lead', 'account', 'contact'], description: '关联的对象类型。' },
+      targetId:   { type: 'string', description: '关联对象的 ID。' },
+      dueDate:    { type: 'string', description: '到期日期 (YYYY-MM-DD)。如未指定，默认 3 天后。' },
+      priority:   { type: 'string', enum: ['low', 'normal', 'high'], description: '优先级，默认 normal。' },
+      description: { type: 'string', description: '任务详情，可选。' },
+    },
+    required: ['subject', 'targetType', 'targetId'],
+  },
+  handler: async (input, ctx) => {
+    const perm = requirePerm(ctx, 'activity.write');
+    if (!perm.ok) return { success: false, reason: perm.reason };
+
+    // Validate target exists and is in tenant.
+    const targetType = String(input.targetType);
+    const targetId = String(input.targetId);
+    const exists = await targetExists(ctx, targetType, targetId);
+    if (!exists) {
+      return { success: false, reason: `${targetType}#${targetId} 不存在或不在当前租户内` };
+    }
+
+    const due = input.dueDate
+      ? new Date(String(input.dueDate))
+      : new Date(Date.now() + 3 * 86_400_000);
+    if (isNaN(due.getTime())) {
+      return { success: false, reason: '到期日期格式无效' };
+    }
+
+    const activity = await ctx.prisma.activity.create({
+      data: {
+        tenantId: ctx.tenantId,
+        ownerId: ctx.userId,
+        createdById: ctx.userId,
+        updatedById: ctx.userId,
+        type: 'TASK',
+        status: 'OPEN',
+        subject: String(input.subject).slice(0, 200),
+        priority: (typeof input.priority === 'string' && ['low', 'normal', 'high'].includes(input.priority))
+          ? String(input.priority)
+          : 'normal',
+        dueDate: due,
+        targetType,
+        targetId,
+        description: input.description ? String(input.description).slice(0, 2000) : null,
+      },
+    });
+
+    return {
+      success: true,
+      activityId: activity.id,
+      subject: activity.subject,
+      dueDate: activity.dueDate?.toISOString().slice(0, 10) ?? null,
+    };
+  },
+};
+
+// ── Tool: update_opportunity_next_step (WRITE) ────────────────────────────
+
+const updateOpportunityNextStep: ToolDefinition = {
+  name: 'update_opportunity_next_step',
+  description: '更新某商机的"下一步行动" (nextStep) 字段。' +
+    '当用户说"把 X 商机的下一步改成 Y"、"记录一下 X 这单要怎么推进"时使用。',
+  input_schema: {
+    type: 'object',
+    properties: {
+      opportunityId: { type: 'string', description: '商机 ID。' },
+      nextStep:      { type: 'string', description: '下一步行动描述，建议 ≤80 字。' },
+    },
+    required: ['opportunityId', 'nextStep'],
+  },
+  handler: async (input, ctx) => {
+    const perm = requirePerm(ctx, 'opportunity.write');
+    if (!perm.ok) return { success: false, reason: perm.reason };
+
+    const opp = await ctx.prisma.opportunity.findFirst({
+      where: { id: String(input.opportunityId), tenantId: ctx.tenantId, deletedAt: null },
+      select: { id: true, name: true, nextStep: true, ownerId: true },
+    });
+    if (!opp) return { success: false, reason: '商机不存在或不在当前租户内' };
+
+    const updated = await ctx.prisma.opportunity.update({
+      where: { id: opp.id },
+      data: {
+        nextStep: String(input.nextStep).slice(0, 500),
+        updatedById: ctx.userId,
+      },
+      select: { id: true, name: true, nextStep: true },
+    });
+
+    return {
+      success: true,
+      opportunityId: updated.id,
+      name: updated.name,
+      nextStep: updated.nextStep,
+      previousNextStep: opp.nextStep,
+    };
+  },
+};
+
+// ── Helper: validate target exists in tenant ─────────────────────────────
+
+async function targetExists(ctx: CopilotContext, type: string, id: string): Promise<boolean> {
+  const where = { id, tenantId: ctx.tenantId, deletedAt: null };
+  switch (type) {
+    case 'opportunity': return !!(await ctx.prisma.opportunity.findFirst({ where, select: { id: true } }));
+    case 'lead':        return !!(await ctx.prisma.lead.findFirst({ where, select: { id: true } }));
+    case 'account':     return !!(await ctx.prisma.account.findFirst({ where, select: { id: true } }));
+    case 'contact':     return !!(await ctx.prisma.contact.findFirst({ where, select: { id: true } }));
+    default: return false;
+  }
+}
+
 export const COPILOT_TOOLS: ToolDefinition[] = [
   searchOpportunities,
   searchLeads,
@@ -435,6 +569,8 @@ export const COPILOT_TOOLS: ToolDefinition[] = [
   getPipelineRiskOverview,
   countMyPipeline,
   listStalledOpportunities,
+  createFollowupTask,
+  updateOpportunityNextStep,
 ];
 
 export const COPILOT_TOOL_BY_NAME: Map<string, ToolDefinition> = new Map(

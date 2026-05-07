@@ -11,12 +11,14 @@
 //   POST /ai/leads/:id/score/refresh
 
 import {
-  Body, Controller, Get, Param, Post, Query, UseGuards,
+  Body, Controller, Get, Param, Post, Query, Res, UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { IsArray, IsIn, IsInt, IsOptional, IsString, MaxLength, Max, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { AiService } from './ai.service';
 import { AiChatService, type ChatMessage } from './ai-chat.service';
+import { AiAnomalyService } from './ai-anomaly.service';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 import { CurrentUser, TenantId } from '../../common/decorators/current-user.decorator';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
@@ -46,6 +48,12 @@ class ChatMessageDto {
   text!: string;
 }
 
+class OppBandsByIdsDto {
+  @IsArray()
+  @IsString({ each: true })
+  ids!: string[];
+}
+
 class ChatRequestDto {
   @IsString()
   @MaxLength(2_000)
@@ -64,6 +72,7 @@ export class AiController {
   constructor(
     private readonly ai: AiService,
     private readonly chat: AiChatService,
+    private readonly anomaly: AiAnomalyService,
   ) {}
 
   // ── Opportunity Win Probability ────────────────────────────────────────────
@@ -154,6 +163,17 @@ export class AiController {
     return this.ai.getAccountBriefing(tenantId, id, { force: true, userId: user.id });
   }
 
+  // ── Bulk band lookup ─────────────────────────────────────────────────────
+
+  @Post('opportunities/bands')
+  @RequirePermissions('ai.read')
+  oppBandsByIds(
+    @TenantId() tenantId: string,
+    @Body() body: OppBandsByIdsDto,
+  ) {
+    return this.ai.getOpportunityBandsByIds(tenantId, body.ids.slice(0, 500));
+  }
+
   // ── Pipeline Risk Board ──────────────────────────────────────────────────
 
   @Get('pipeline-risk')
@@ -187,6 +207,27 @@ export class AiController {
     );
   }
 
+  // ── Dashboard AI summary ─────────────────────────────────────────────────
+
+  @Get('dashboard-summary')
+  @RequirePermissions('ai.read')
+  dashboardSummary(
+    @TenantId() tenantId: string,
+    @Query('mineOnly') mineOnly: string | undefined,
+    @CurrentUser() user: RequestUser,
+  ) {
+    const ownerId = mineOnly === 'true' ? user.id : undefined;
+    return this.anomaly.getDashboardSummary(tenantId, ownerId);
+  }
+
+  // ── Admin: trigger anomaly scan now (manual run) ─────────────────────────
+
+  @Post('admin/anomaly-scan')
+  @RequirePermissions('admin.*')
+  async triggerAnomalyScan() {
+    return this.anomaly.scanAll();
+  }
+
   // ── Sales Copilot Chat ────────────────────────────────────────────────────
 
   @Post('chat')
@@ -203,8 +244,57 @@ export class AiController {
     return this.chat.chat({
       tenantId,
       userId: user.id,
+      permissions: user.permissions ?? [],
       history,
       message: body.message,
     });
+  }
+
+  // ── Streaming variant of /ai/chat ────────────────────────────────────────
+  // Uses SSE-style chunks over a regular POST so the existing JWT
+  // Authorization header still works (EventSource doesn't allow auth headers).
+  // Each chunk is `data: {json}\n\n`.
+
+  @Post('chat/stream')
+  @RequirePermissions('ai.invoke')
+  async copilotChatStream(
+    @TenantId() tenantId: string,
+    @Body() body: ChatRequestDto,
+    @CurrentUser() user: RequestUser,
+    @Res() res: Response,
+  ) {
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no'); // disable nginx buffering
+    res.flushHeaders?.();
+
+    const history: ChatMessage[] = (body.history ?? []).map((m) => ({
+      role: m.role,
+      text: m.text,
+    }));
+
+    const write = (eventName: string, payload: unknown) => {
+      res.write(`event: ${eventName}\n`);
+      res.write(`data: ${JSON.stringify(payload)}\n\n`);
+    };
+
+    try {
+      await this.chat.chatStream(
+        {
+          tenantId,
+          userId: user.id,
+          permissions: user.permissions ?? [],
+          history,
+          message: body.message,
+        },
+        (event) => {
+          write(event.type, event);
+        },
+      );
+    } catch (err) {
+      write('error', { message: (err as Error).message ?? String(err) });
+    }
+    res.end();
   }
 }

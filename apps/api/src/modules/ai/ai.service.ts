@@ -101,6 +101,16 @@ interface PipelineRiskStats {
   atRiskAmount: number; // sum of amounts where band === 'low'
 }
 
+function toBand(payload: OppWinProbabilityPayload) {
+  return {
+    score: payload.score,
+    band: payload.band,
+    headline: payload.headline,
+    topRisk: payload.riskFactors?.[0] ?? null,
+    topAction: payload.nextActions?.[0]?.action ?? null,
+  };
+}
+
 function emptyRiskStats(): PipelineRiskStats {
   return {
     total: 0, analyzed: 0, highRisk: 0, mediumRisk: 0, healthy: 0,
@@ -520,6 +530,33 @@ export class AiService {
       source: result.source === 'live' ? 'heuristic' : 'stub',
       latencyMs: Date.now() - t0,
     };
+  }
+
+  // ── Bulk lookup: AI bands by opportunity IDs (no generation) ─────────────
+  // Used by list/drawer views (forecast pivot, opp list) to decorate rows
+  // with their cached AI score/band without a per-row request.
+
+  async getOpportunityBandsByIds(
+    tenantId: string,
+    ids: string[],
+  ): Promise<Record<string, { score: number; band: 'low' | 'medium' | 'high'; headline: string; topRisk: string | null; topAction: string | null }>> {
+    if (ids.length === 0) return {};
+    const insights = await this.prisma.aIInsight.findMany({
+      where: {
+        tenantId,
+        targetType: 'opportunity',
+        targetId: { in: ids },
+        kind: AIInsightKind.OPP_WIN_PROBABILITY,
+      },
+      select: { targetId: true, payload: true },
+    });
+    const out: Record<string, ReturnType<typeof toBand>> = {};
+    for (const ins of insights) {
+      const payload = ins.payload as OppWinProbabilityPayload | null;
+      if (!payload) continue;
+      out[ins.targetId] = toBand(payload);
+    }
+    return out;
   }
 
   // ── Pipeline Risk Board ───────────────────────────────────────────────────
