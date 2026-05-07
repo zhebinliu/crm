@@ -1,5 +1,6 @@
 import { Body, Controller, Param, Post, UseGuards } from '@nestjs/common';
 import { IsString, MaxLength } from 'class-validator';
+import { Throttle } from '@nestjs/throttler';
 import { ImportService } from './import.service';
 import { CurrentUser, TenantId } from '../../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
@@ -17,7 +18,13 @@ class ImportCsvDto {
 export class ImportController {
   constructor(private readonly svc: ImportService) {}
 
+  // CSV import is the heaviest endpoint we expose: one request can fan
+  // out to thousands of writes. 10 req/min per (tenant, ip) is plenty.
   @Post(':objectApiName')
+  @Throttle({
+    short: { limit: 10, ttl: 60_000 },
+    long: { limit: 10, ttl: 60_000 },
+  })
   @RequirePermissions('admin.*')
   async importCsv(
     @TenantId() tenantId: string,
