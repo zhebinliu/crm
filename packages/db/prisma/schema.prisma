@@ -63,6 +63,7 @@ model Tenant {
   cases               Case[]
   campaigns           Campaign[]
   campaignMembers     CampaignMember[]
+  persons             Person[]
 
   @@map("tenants")
 }
@@ -364,6 +365,12 @@ model Lead {
   ownerId  String
   owner    User   @relation("LeadOwner", fields: [ownerId], references: [id])
 
+  // Customer 360: link to the canonical Person identity (set on create/update
+  // by IdentityResolutionService). Optional because IdentityRule may surface
+  // a match for human confirmation rather than auto-link.
+  personId String?
+  person   Person? @relation("LeadPerson", fields: [personId], references: [id], onDelete: SetNull)
+
   // identity
   firstName String?
   lastName  String
@@ -412,6 +419,7 @@ model Lead {
   @@index([tenantId, ownerId])
   @@index([tenantId, email])
   @@index([tenantId, isConverted])
+  @@index([tenantId, personId])
   @@map("leads")
 }
 
@@ -478,6 +486,10 @@ model Contact {
   reportsTo   Contact?  @relation("ContactReports", fields: [reportsToId], references: [id])
   reports     Contact[] @relation("ContactReports")
 
+  // Customer 360: link to the canonical Person identity (see Lead.personId).
+  personId String?
+  person   Person? @relation("ContactPerson", fields: [personId], references: [id], onDelete: SetNull)
+
   firstName    String?
   lastName     String
   title        String?
@@ -507,6 +519,7 @@ model Contact {
 
   @@index([tenantId, accountId])
   @@index([tenantId, email])
+  @@index([tenantId, personId])
   @@map("contacts")
 }
 
@@ -1629,4 +1642,105 @@ model WebhookDeadLetter {
   @@index([tenantId, resolvedAt, createdAt])
   @@index([tenantId, idempotencyKey])
   @@map("webhook_dead_letters")
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// CUSTOMER 360 — UNIFIED PERSON GRAPH
+// ════════════════════════════════════════════════════════════════════════════
+// Person is the canonical individual identity. Lead and Contact both link to
+// the same Person when identity rules judge them to be the same human. This
+// powers "give me the unified Customer 360 view" queries that span sales
+// touchpoints (Lead → Contact), service touchpoints (Case via Contact), and
+// marketing touchpoints (CampaignMember via Lead/Contact).
+//
+// Lead and Contact still own their own lifecycle/pipeline/account fields;
+// Person only carries identity-grade data (name, normalized email/phone).
+
+model Person {
+  id        String  @id @default(cuid())
+  tenantId  String
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Canonical identity values (normalized: lowercase email, digits-only phone)
+  primaryEmail      String?
+  primaryEmailNorm  String? // lowercase, trimmed — used for fuzzy match
+  primaryPhone      String?
+  primaryPhoneNorm  String? // digits only — used for fuzzy match
+  firstName         String?
+  lastName          String?
+  fullNameNorm      String? // lowercase concatenated for fuzzy match
+
+  // Free-form identity data (alternate emails/phones, social handles, etc.)
+  identifiers Json @default("[]") // [{kind: "email"|"phone"|"linkedin"|..., value, source, verifiedAt}]
+
+  // Counts for fast Customer 360 list views
+  leadCount       Int @default(0)
+  contactCount    Int @default(0)
+  campaignCount   Int @default(0)
+  caseCount       Int @default(0)
+  opportunityCount Int @default(0)
+
+  // Soft-merge support: when two Persons get merged, the loser's ID points here.
+  mergedIntoId String?
+  mergedInto   Person?  @relation("PersonMerge", fields: [mergedIntoId], references: [id])
+  mergedFrom   Person[] @relation("PersonMerge")
+  mergedAt     DateTime?
+
+  leads    Lead[]    @relation("LeadPerson")
+  contacts Contact[] @relation("ContactPerson")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  @@index([tenantId, primaryEmailNorm])
+  @@index([tenantId, primaryPhoneNorm])
+  @@index([tenantId, fullNameNorm])
+  @@index([tenantId, mergedIntoId])
+  @@map("persons")
+}
+
+// Tenant-configurable rules for identity resolution. Evaluated in priority
+// order on Lead/Contact write; if any rule matches an existing Person the
+// new record links to that Person. If none match a fresh Person is created.
+model IdentityRule {
+  id          String  @id @default(cuid())
+  tenantId    String
+  name        String
+  description String?
+  // Comparator: "exact_email" | "exact_phone" | "exact_name_email_domain" |
+  //             "fuzzy_name" | "first_letter_lastname_email"
+  comparator  String
+  // Block on match (don't auto-merge, surface as DedupeCandidate)
+  surfaceOnly Boolean @default(false)
+  isActive    Boolean @default(true)
+  priority    Int     @default(100)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId, isActive, priority])
+  @@map("identity_rules")
+}
+
+// When the rule says surfaceOnly=true (or two equally-good matches exist),
+// the candidate match is parked here for a human to confirm/reject.
+model DedupeCandidate {
+  id          String  @id @default(cuid())
+  tenantId    String
+  // What just got created/updated
+  sourceType  String  // "lead" | "contact"
+  sourceId    String
+  // What it might be a duplicate of
+  candidatePersonId String
+  ruleId      String? // which rule fired
+  score       Float   // 0..1 — confidence
+  status      String  @default("pending") // pending | confirmed_merge | rejected
+  resolvedAt  DateTime?
+  resolvedById String?
+  resolvedNote String?
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId, status, createdAt])
+  @@index([tenantId, sourceType, sourceId])
+  @@map("dedupe_candidates")
 }

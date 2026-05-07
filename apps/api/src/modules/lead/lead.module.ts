@@ -1,12 +1,13 @@
 import { Module } from '@nestjs/common';
 import { WorkflowModule } from '../workflow/workflow.module';
 import { OutboxModule } from '../../common/outbox.module';
+import { PersonModule } from '../person/person.module';
 import { LeadService } from './lead.service';
 import { LeadController } from './lead.controller';
 import { LeadResolver } from './lead.resolver';
 
 @Module({
-  imports: [WorkflowModule, OutboxModule],
+  imports: [WorkflowModule, OutboxModule, PersonModule],
   providers: [LeadService, LeadResolver],
   controllers: [LeadController],
   exports: [LeadService],

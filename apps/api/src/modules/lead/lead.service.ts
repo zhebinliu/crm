@@ -6,6 +6,7 @@ import { WorkflowService } from '../workflow/workflow.service';
 import { ValidationRuleService } from '../workflow/validation-rule.service';
 import { AuditService } from '../workflow/audit.service';
 import { OutboxService } from '../../common/outbox.service';
+import { IdentityResolutionService } from '../person/identity-resolution.service';
 import { EVENTS } from '@tokenwave/shared';
 import type { RequestUser } from '../../common/types/request-context';
 
@@ -35,6 +36,7 @@ export class LeadService extends BaseEntityService {
     audit: AuditService,
     emitter: EventEmitter2,
     outbox: OutboxService,
+    private readonly identity: IdentityResolutionService,
   ) {
     super(workflow, validation, audit, emitter, outbox);
   }
@@ -82,6 +84,26 @@ export class LeadService extends BaseEntityService {
       ownerId: (input['ownerId'] as string) || user.id,
     };
     const lead = await this.prisma.lead.create({ data: data as any });
+    // Customer 360: resolve identity and link to canonical Person
+    try {
+      const resolution = await this.identity.resolve(tenantId, {
+        firstName: lead.firstName,
+        lastName: lead.lastName,
+        email: lead.email,
+        phone: lead.phone,
+        mobile: lead.mobile,
+        source: 'lead',
+        sourceId: lead.id,
+      });
+      await this.prisma.lead.update({
+        where: { id: lead.id },
+        data: { personId: resolution.personId },
+      });
+      (lead as Record<string, unknown>)['personId'] = resolution.personId;
+    } catch (e) {
+      // Identity resolution failures shouldn't block lead creation
+      // (the row still exists, it just lacks a Person link until reconcile)
+    }
     await this.afterCreate(tenantId, 'lead', lead as Record<string, unknown>, user);
     return lead;
   }
