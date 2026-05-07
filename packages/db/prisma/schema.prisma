@@ -65,8 +65,50 @@ model Tenant {
   campaignMembers     CampaignMember[]
   persons             Person[]
   recycleBinEntries   RecycleBinEntry[]
+  recordEmbeddings    RecordEmbedding[]
 
   @@map("tenants")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// SEMANTIC SEARCH / RAG (Wave 17)
+// ─────────────────────────────────────────────────────────────────────────
+// Vector embeddings for tenant records, used for semantic retrieval to
+// ground the AI Copilot on actual CRM data.
+//
+// Storage: pgvector is preferred but not available in the local Postgres,
+// so we fall back to `Float[]` and compute cosine similarity in-process.
+// To upgrade later: install the `vector` extension via
+//   CREATE EXTENSION IF NOT EXISTS vector;
+// then change `embedding Float[]` → `embedding Unsupported("vector(1536)")`
+// and switch the search SQL to use the `<=>` operator.
+//
+// Dimension: 1536 (OpenAI text-embedding-3-small / ada-002 default).
+
+model RecordEmbedding {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  recordType  String // "lead" | "contact" | "account" | "opportunity" | "case" | "activity"
+  recordId    String
+
+  // Vector embedding. Stored as Float[] (pgvector fallback).
+  embedding   Float[]
+
+  // Hash of the input text — used to skip re-embedding when content hasn't
+  // changed (saves OpenAI tokens on every record save).
+  contentHash String
+  content     String   @db.Text
+
+  model       String   @default("text-embedding-3-small")
+  dimension   Int      @default(1536)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([tenantId, recordType, recordId])
+  @@index([tenantId, recordType])
+  @@map("record_embeddings")
 }
 
 // ════════════════════════════════════════════════════════════════════════════

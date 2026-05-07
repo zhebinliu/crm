@@ -7,6 +7,7 @@ import { ValidationRuleService } from '../workflow/validation-rule.service';
 import { AuditService } from '../workflow/audit.service';
 import { OutboxService } from '../../common/outbox.service';
 import { IdentityResolutionService } from '../person/identity-resolution.service';
+import { EmbeddingService, leadContent } from '../embeddings/embedding.service';
 import { EVENTS } from '@tokenwave/shared';
 import { FlsService } from '../fls/fls.service';
 import type { RequestUser } from '../../common/types/request-context';
@@ -41,8 +42,28 @@ export class LeadService extends BaseEntityService {
     recycleBin: RecycleBinService,
     private readonly identity: IdentityResolutionService,
     private readonly fls: FlsService,
+    embeddings: EmbeddingService,
   ) {
     super(workflow, validation, audit, emitter, outbox, recycleBin);
+    this.embeddings = embeddings;
+  }
+
+  /** Project a Lead into the text we embed for RAG. */
+  protected buildEmbeddingContent(
+    objectApiName: string,
+    record: Record<string, unknown>,
+  ): string | null {
+    if (objectApiName !== 'lead') return null;
+    return leadContent({
+      firstName: record['firstName'] as string | null,
+      lastName: record['lastName'] as string | null,
+      company: record['company'] as string | null,
+      title: record['title'] as string | null,
+      email: record['email'] as string | null,
+      industry: record['industry'] as string | null,
+      description: record['description'] as string | null,
+      status: record['status'] as string | null,
+    });
   }
 
   async list(tenantId: string, opts: LeadListOptions = {}, user?: RequestUser) {

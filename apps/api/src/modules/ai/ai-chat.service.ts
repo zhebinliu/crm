@@ -13,6 +13,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { ClaudeClient, type ChatTurn, type ChatBlock } from './claude.client';
 import { COPILOT_TOOLS, COPILOT_TOOL_BY_NAME, type CopilotContext } from './copilot-tools';
 import { AiService } from './ai.service';
+import { EmbeddingService, type SimilarityHit } from '../embeddings/embedding.service';
 
 // What the client sends in / receives back. Keep this stable — UI renders it.
 
@@ -83,7 +84,35 @@ export class AiChatService {
     private readonly prisma: PrismaService,
     private readonly claude: ClaudeClient,
     private readonly ai: AiService,
+    private readonly embeddings: EmbeddingService,
   ) {}
+
+  /**
+   * Build the RAG-grounded system prompt: base copilot instructions + a
+   * "Relevant records" block from semantic search. Conservative: if
+   * retrieval yields nothing or errors, returns the unmodified base
+   * prompt and we behave exactly like the pre-RAG path.
+   */
+  private async buildGroundedSystemPrompt(
+    tenantId: string,
+    userMessage: string,
+  ): Promise<string> {
+    let hits: SimilarityHit[] = [];
+    try {
+      hits = await this.embeddings.searchSimilar(tenantId, null, userMessage, 8);
+    } catch (err) {
+      this.logger.warn(`RAG retrieval failed; falling back to ungrounded prompt: ${(err as Error).message}`);
+      return COPILOT_SYSTEM_PROMPT;
+    }
+    if (hits.length === 0) return COPILOT_SYSTEM_PROMPT;
+
+    const lines = hits.map((h) => {
+      // Truncate per-hit content to keep the prompt token-cheap.
+      const snippet = h.content.length > 240 ? h.content.slice(0, 240) + '…' : h.content;
+      return `- [${h.recordType}:${h.recordId}] ${snippet}`;
+    });
+    return `${COPILOT_SYSTEM_PROMPT}\n\n## Relevant records (retrieved from this tenant via semantic search)\n${lines.join('\n')}\n\n用上述相关记录辅助回答；如果上下文不足，再调用工具补充。`;
+  }
 
   async chat(args: {
     tenantId: string;
@@ -115,6 +144,11 @@ export class AiChatService {
       { role: 'user', content: args.message },
     ];
 
+    // RAG: retrieve top-K semantically-similar records for this tenant and
+    // splice them into the system prompt. Falls back silently to the base
+    // prompt if retrieval is empty or errors.
+    const groundedSystemPrompt = await this.buildGroundedSystemPrompt(args.tenantId, args.message);
+
     const toolEvents: ChatMessage['toolEvents'] = [];
     let finalText = '';
     let iterations = 0;
@@ -125,7 +159,7 @@ export class AiChatService {
     while (iterations < MAX_ITERATIONS) {
       iterations += 1;
       const step = await this.claude.chatStep({
-        system: COPILOT_SYSTEM_PROMPT,
+        system: groundedSystemPrompt,
         history: turns,
         tools: COPILOT_TOOLS.map((t) => ({
           name: t.name,
@@ -273,6 +307,9 @@ export class AiChatService {
     ];
     const toolEvents: NonNullable<ChatMessage['toolEvents']> = [];
 
+    // RAG-grounded system prompt for streaming variant.
+    const groundedSystemPrompt = await this.buildGroundedSystemPrompt(args.tenantId, args.message);
+
     let finalText = '';
     let iterations = 0;
     let modelName = '';
@@ -284,7 +321,7 @@ export class AiChatService {
         iterations += 1;
 
         const step = await this.claude.chatStepStream({
-          system: COPILOT_SYSTEM_PROMPT,
+          system: groundedSystemPrompt,
           history: turns,
           tools: COPILOT_TOOLS.map((t) => ({
             name: t.name, description: t.description, input_schema: t.input_schema,

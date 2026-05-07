@@ -7,6 +7,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { RequestUser } from './types/request-context';
 import { OutboxService } from './outbox.service';
 import { RecycleBinService } from '../modules/recycle-bin/recycle-bin.service';
+import type { EmbeddingService } from '../modules/embeddings/embedding.service';
 
 /** Shared by all LTC entity services for consistent workflow/audit behaviour. */
 export abstract class BaseEntityService {
@@ -18,6 +19,13 @@ export abstract class BaseEntityService {
    */
   protected readonly recycleBin?: RecycleBinService;
 
+  /**
+   * Optional semantic-search hook. Subclasses that want their records
+   * indexed for RAG retrieval set this in their constructor and override
+   * {@link buildEmbeddingContent} to project the record into a string.
+   */
+  protected embeddings?: EmbeddingService;
+
   constructor(
     protected readonly workflow: WorkflowService,
     protected readonly validation: ValidationRuleService,
@@ -27,6 +35,40 @@ export abstract class BaseEntityService {
     @Optional() recycleBin?: RecycleBinService,
   ) {
     this.recycleBin = recycleBin;
+  }
+
+  /**
+   * Subclasses override to provide the text to embed for a given record.
+   * Returning null/empty disables embedding for that record. Default: no
+   * embedding.
+   */
+  protected buildEmbeddingContent(
+    _objectApiName: string,
+    _record: Record<string, unknown>,
+  ): string | null {
+    return null;
+  }
+
+  /**
+   * Fire-and-forget embedding upsert. Always swallows errors so that
+   * record writes are never blocked by the AI subsystem.
+   */
+  private scheduleEmbeddingUpsert(
+    tenantId: string,
+    objectApiName: string,
+    record: Record<string, unknown>,
+  ) {
+    if (!this.embeddings) return;
+    const content = this.buildEmbeddingContent(objectApiName, record);
+    if (!content) return;
+    const recordId = record['id'] as string | undefined;
+    if (!recordId) return;
+    // Run async; don't await, don't block.
+    void this.embeddings
+      .upsertRecordEmbedding(tenantId, objectApiName, recordId, content)
+      .catch(() => {
+        /* already logged inside the service */
+      });
   }
 
   protected async beforeSave(
@@ -48,6 +90,7 @@ export abstract class BaseEntityService {
     await this.audit.log({ tenantId, actorId: user?.id, action: 'create', recordType: objectApiName, recordId: record['id'] as string });
     await this.outbox.emit(tenantId, `${objectApiName}.created`, objectApiName, record['id'] as string, record);
     await this.workflow.trigger({ tenantId, objectApiName, trigger: WorkflowTrigger.ON_CREATE, record, user });
+    this.scheduleEmbeddingUpsert(tenantId, objectApiName, record);
   }
 
   protected async afterUpdate(
@@ -62,6 +105,7 @@ export abstract class BaseEntityService {
     await this.outbox.emit(tenantId, `${objectApiName}.updated`, objectApiName, record['id'] as string, record);
     await this.workflow.trigger({ tenantId, objectApiName, trigger: WorkflowTrigger.ON_UPDATE, record, previous, user });
     await this.workflow.trigger({ tenantId, objectApiName, trigger: WorkflowTrigger.ON_FIELD_CHANGE, record, previous, user });
+    this.scheduleEmbeddingUpsert(tenantId, objectApiName, record);
   }
 
   /**
