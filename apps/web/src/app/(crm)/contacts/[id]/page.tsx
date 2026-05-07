@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { contactsApi, accountsApi } from '@/lib/api';
 import { ActivityTimeline } from '@/components/crm/activity-timeline';
 import { CustomFieldsCard } from '@/components/dynamic/custom-fields-card';
+import { CustomFieldsSection, type CustomFieldsSectionHandle } from '@/components/dynamic/custom-fields-section';
 import { fmtDate, cn } from '@/lib/utils';
 import {
   ArrowLeft, User, Mail, Phone, Briefcase,
@@ -81,6 +82,8 @@ function ContactFormModal({
     ...initial,
   });
   const [errors, setErrors] = useState<Partial<ContactFormData>>({});
+  const [customFields, setCustomFields] = useState<Record<string, unknown>>({});
+  const customRef = useRef<CustomFieldsSectionHandle>(null);
 
   const { data: accountsData } = useQuery({
     queryKey: ['accounts-lookup'],
@@ -111,7 +114,8 @@ function ContactFormModal({
   function handleSubmit(ev: React.FormEvent) {
     ev.preventDefault();
     if (!validate()) return;
-    updateMut.mutate({
+    if (customRef.current && !customRef.current.validate()) return;
+    const payload: Record<string, unknown> = {
       firstName: form.firstName.trim() || undefined,
       lastName: form.lastName.trim(),
       email: form.email || undefined,
@@ -120,7 +124,11 @@ function ContactFormModal({
       department: form.department || undefined,
       accountId: form.accountId || undefined,
       description: form.description || undefined,
-    });
+    };
+    if (Object.keys(customFields).length > 0) {
+      payload.customFields = customFields;
+    }
+    updateMut.mutate(payload);
   }
 
   return (
@@ -185,6 +193,15 @@ function ContactFormModal({
             <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">描述</Label>
             <Textarea value={form.description} onChange={set('description')} placeholder="联系人备注..." rows={3} className="rounded-xl border-slate-200 resize-none" />
           </div>
+
+          <CustomFieldsSection
+            ref={customRef}
+            objectApiName="Contact"
+            value={customFields}
+            onChange={setCustomFields}
+            initial={(initial as { customFields?: Record<string, unknown> } | undefined)?.customFields ?? null}
+          />
+
           <div className="flex justify-end gap-3 pt-2">
             <Button type="button" variant="outline" onClick={onClose} className="rounded-xl h-10 px-5 font-bold border-slate-200">
               取消
