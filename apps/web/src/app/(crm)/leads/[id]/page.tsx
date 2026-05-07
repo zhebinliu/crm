@@ -13,6 +13,7 @@ import { LeadFormModal } from '../lead-form-modal';
 import { ConvertLeadModal } from './convert-lead-modal';
 import { LeadScoreCard } from '@/components/ai/lead-score-card';
 import { LeadOutreachDrawer } from '@/components/ai/lead-outreach-drawer';
+import { CustomFieldsCard } from '@/components/dynamic/custom-fields-card';
 import {
   ArrowLeft,
   Edit2,
@@ -240,6 +241,14 @@ export default function LeadDetailPage() {
       <LeadScoreCard
         leadId={id}
         onScoreChanged={() => queryClient.invalidateQueries({ queryKey: ['lead', id] })}
+      />
+
+      {/* Custom fields (admin-defined) */}
+      <CustomFieldsCard
+        objectApiName="Lead"
+        customFields={lead.customFields as Record<string, unknown> | null}
+        saveFn={(patch) => leadsApi.update(id, patch)}
+        onSaved={() => queryClient.invalidateQueries({ queryKey: ['lead', id] })}
       />
 
       {/* Info Grid */}

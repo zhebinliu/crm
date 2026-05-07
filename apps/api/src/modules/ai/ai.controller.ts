@@ -228,6 +228,19 @@ export class AiController {
     return this.anomaly.scanAll();
   }
 
+  // ── Admin: AI usage telemetry (this tenant only) ─────────────────────────
+
+  @Get('admin/telemetry')
+  @RequirePermissions('admin.*')
+  telemetry(
+    @TenantId() tenantId: string,
+    @Query('days') days: string | undefined,
+  ) {
+    return this.ai.getTelemetry(tenantId, {
+      days: days ? Number(days) : undefined,
+    });
+  }
+
   // ── Sales Copilot Chat ────────────────────────────────────────────────────
 
   @Post('chat')

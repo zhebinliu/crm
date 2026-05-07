@@ -101,6 +101,38 @@ interface PipelineRiskStats {
   atRiskAmount: number; // sum of amounts where band === 'low'
 }
 
+export interface TelemetrySummary {
+  totals: {
+    insights: number;
+    promptTokens: number;
+    outputTokens: number;
+    cacheReadTokens: number;
+    cacheWriteTokens: number;
+    avgLatencyMs: number;
+    liveCount: number;
+    stubCount: number;
+    cacheHitRate: number; // 0..1
+  };
+  byKind: Array<{
+    kind: string;
+    count: number;
+    promptTokens: number;
+    outputTokens: number;
+    cacheReadTokens: number;
+    cacheWriteTokens: number;
+    avgLatencyMs: number;
+  }>;
+  byDay: Array<{
+    day: string;
+    count: number;
+    promptTokens: number;
+    outputTokens: number;
+    cacheReadTokens: number;
+  }>;
+  since: string;
+  windowDays: number;
+}
+
 function toBand(payload: OppWinProbabilityPayload) {
   return {
     score: payload.score,
@@ -529,6 +561,120 @@ export class AiService {
       modelName: result.modelName,
       source: result.source === 'live' ? 'heuristic' : 'stub',
       latencyMs: Date.now() - t0,
+    };
+  }
+
+  // ── Telemetry / cost dashboard ────────────────────────────────────────────
+  // Aggregates AIInsight rows for the admin view. All scoped by tenant;
+  // admins see only their own tenant's spend.
+
+  async getTelemetry(
+    tenantId: string,
+    opts: { days?: number } = {},
+  ): Promise<TelemetrySummary> {
+    const days = Math.max(1, Math.min(opts.days ?? 30, 90));
+    const since = new Date(Date.now() - days * 86_400_000);
+
+    // Pull only the columns we need; rows can be many, but each is small.
+    const rows = await this.prisma.aIInsight.findMany({
+      where: { tenantId, generatedAt: { gte: since } },
+      select: {
+        kind: true,
+        modelName: true,
+        promptTokens: true,
+        outputTokens: true,
+        cacheReadTokens: true,
+        cacheWriteTokens: true,
+        latencyMs: true,
+        generatedAt: true,
+      },
+    });
+
+    const totals = {
+      insights: rows.length,
+      promptTokens: 0,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      avgLatencyMs: 0,
+      liveCount: 0,
+      stubCount: 0,
+    };
+
+    const byKind = new Map<string, {
+      kind: string;
+      count: number;
+      promptTokens: number;
+      outputTokens: number;
+      cacheReadTokens: number;
+      cacheWriteTokens: number;
+      avgLatencyMs: number;
+    }>();
+
+    const byDay = new Map<string, {
+      day: string;
+      count: number;
+      promptTokens: number;
+      outputTokens: number;
+      cacheReadTokens: number;
+    }>();
+
+    let latencySum = 0;
+    for (const r of rows) {
+      totals.promptTokens     += r.promptTokens;
+      totals.outputTokens     += r.outputTokens;
+      totals.cacheReadTokens  += r.cacheReadTokens;
+      totals.cacheWriteTokens += r.cacheWriteTokens;
+      latencySum              += r.latencyMs;
+      if (r.modelName.endsWith('-stub')) totals.stubCount += 1;
+      else totals.liveCount += 1;
+
+      const k = byKind.get(r.kind) ?? {
+        kind: r.kind, count: 0, promptTokens: 0, outputTokens: 0,
+        cacheReadTokens: 0, cacheWriteTokens: 0, avgLatencyMs: 0,
+      };
+      k.count += 1;
+      k.promptTokens += r.promptTokens;
+      k.outputTokens += r.outputTokens;
+      k.cacheReadTokens += r.cacheReadTokens;
+      k.cacheWriteTokens += r.cacheWriteTokens;
+      k.avgLatencyMs += r.latencyMs;
+      byKind.set(r.kind, k);
+
+      const day = r.generatedAt.toISOString().slice(0, 10);
+      const d = byDay.get(day) ?? { day, count: 0, promptTokens: 0, outputTokens: 0, cacheReadTokens: 0 };
+      d.count += 1;
+      d.promptTokens += r.promptTokens;
+      d.outputTokens += r.outputTokens;
+      d.cacheReadTokens += r.cacheReadTokens;
+      byDay.set(day, d);
+    }
+
+    totals.avgLatencyMs = rows.length > 0 ? Math.round(latencySum / rows.length) : 0;
+
+    // Cache hit rate = cacheReadTokens / (promptTokens + cacheReadTokens)
+    const cacheHitRate = totals.promptTokens + totals.cacheReadTokens > 0
+      ? totals.cacheReadTokens / (totals.promptTokens + totals.cacheReadTokens)
+      : 0;
+
+    // Convert maps + finalize per-kind avg latency
+    const kindList = Array.from(byKind.values())
+      .map((k) => ({ ...k, avgLatencyMs: k.count > 0 ? Math.round(k.avgLatencyMs / k.count) : 0 }))
+      .sort((a, b) => b.count - a.count);
+
+    // Backfill missing days with zero so the chart doesn't have gaps.
+    const dayList: TelemetrySummary['byDay'] = [];
+    for (let i = days - 1; i >= 0; i -= 1) {
+      const dayKey = new Date(Date.now() - i * 86_400_000).toISOString().slice(0, 10);
+      dayList.push(byDay.get(dayKey) ?? { day: dayKey, count: 0, promptTokens: 0, outputTokens: 0, cacheReadTokens: 0 });
+    }
+
+    return {
+      totals: { ...totals, cacheHitRate },
+      byKind: kindList,
+      byDay: dayList,
+      since: since.toISOString(),
+      windowDays: days,
     };
   }
 

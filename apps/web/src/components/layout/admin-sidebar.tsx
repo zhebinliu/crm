@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import {
   Users, Settings,
-  Workflow, Shield, LogOut, ArrowLeft, LayoutDashboard, Database, Mail
+  Workflow, Shield, LogOut, ArrowLeft, LayoutDashboard, Database, Mail, Sparkles,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth';
 import { useRouter } from 'next/navigation';
@@ -25,6 +25,7 @@ const ADMIN_NAV: NavItem[] = [
   { label: '审批流程配置', href: '/admin/approvals/process-config', icon: <LayoutDashboard size={18} /> },
   { label: '邮件模板', href: '/admin/email-templates', icon: <Mail size={18} /> },
   { label: '对象元数据', href: '/admin/metadata', icon: <Settings size={18} /> },
+  { label: 'AI 用量监控', href: '/admin/ai-telemetry', icon: <Sparkles size={18} /> },
 ];
 
 export function AdminSidebar() {

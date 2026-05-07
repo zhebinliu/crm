@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { contactsApi, accountsApi } from '@/lib/api';
 import { ActivityTimeline } from '@/components/crm/activity-timeline';
+import { CustomFieldsCard } from '@/components/dynamic/custom-fields-card';
 import { fmtDate, cn } from '@/lib/utils';
 import {
   ArrowLeft, User, Mail, Phone, Briefcase,
@@ -446,6 +447,13 @@ export default function ContactDetailPage() {
                 </CardContent>
               </Card>
             )}
+
+            <CustomFieldsCard
+              objectApiName="Contact"
+              customFields={(contact as unknown as { customFields?: Record<string, unknown> | null }).customFields ?? null}
+              saveFn={(patch) => contactsApi.update(id, patch)}
+              onSaved={() => qc.invalidateQueries({ queryKey: ['contact', id] })}
+            />
           </div>
         </TabsContent>
 
