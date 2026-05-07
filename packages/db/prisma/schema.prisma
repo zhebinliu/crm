@@ -1602,3 +1602,31 @@ model CustomRecord {
   @@index([tenantId, ownerId])
   @@map("custom_records")
 }
+
+// ── Outbound webhook dead-letter queue ──────────────────────────────────────
+// When SendWebhookAction exhausts its retry budget, the request is parked here
+// for later inspection/replay by an operator. resolvedAt != null means a human
+// (or replay job) has handled it.
+model WebhookDeadLetter {
+  id             String   @id @default(cuid())
+  tenantId       String
+  url            String
+  method         String   @default("POST")
+  headers        Json     @default("{}")
+  body           String // raw JSON body that was attempted
+  attempts       Int      @default(0)
+  lastStatus     Int?
+  lastError      String?
+  idempotencyKey String
+  workflowId     String? // optional: which workflow rule emitted this
+  recordType     String?
+  recordId       String?
+  resolvedAt     DateTime?
+  resolvedNote   String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([tenantId, resolvedAt, createdAt])
+  @@index([tenantId, idempotencyKey])
+  @@map("webhook_dead_letters")
+}
