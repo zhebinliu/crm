@@ -136,7 +136,7 @@ export default function AccountsPage() {
           <h1 className="text-3xl font-black tracking-tight text-ink">客户</h1>
         </div>
         <div className="flex items-center gap-2">
-          <CsvImportButton objectApiName="Account" objectLabel="客户" invalidateKeys={['accounts']} />
+          <CsvImportButton objectApiName="account" objectLabel="客户" invalidateKeys={['accounts']} />
           <Button
             onClick={() => setCreateOpen(true)}
             className="bg-brand hover:bg-brand-deep text-white rounded-xl font-bold h-10 px-5"
@@ -148,7 +148,7 @@ export default function AccountsPage() {
       </div>
 
       <ListViewSelector
-        objectApiName="Account"
+        objectApiName="account"
         filters={filters}
         onApply={setFilters}
       />

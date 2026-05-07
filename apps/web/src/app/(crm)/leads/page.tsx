@@ -201,7 +201,7 @@ export default function LeadsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <CsvImportButton objectApiName="Lead" objectLabel="线索" invalidateKeys={['leads']} />
+          <CsvImportButton objectApiName="lead" objectLabel="线索" invalidateKeys={['leads']} />
           <Button
             className="bg-brand hover:bg-brand-deep text-white rounded-xl font-bold h-11 px-6 shadow-xl shadow-brand/20 gap-2"
             onClick={() => setCreateOpen(true)}
@@ -214,7 +214,7 @@ export default function LeadsPage() {
 
       {/* Saved views */}
       <ListViewSelector
-        objectApiName="Lead"
+        objectApiName="lead"
         filters={filters}
         onApply={setFilters}
       />

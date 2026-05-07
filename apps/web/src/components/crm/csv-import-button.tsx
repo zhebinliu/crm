@@ -24,7 +24,9 @@ interface ImportResult {
 }
 
 interface Props {
-  objectApiName: 'Lead' | 'Account' | 'Contact' | 'Opportunity';
+  /** Object api name (case-insensitive on the backend; lowercase recommended). */
+  objectApiName: 'lead' | 'account' | 'contact' | 'opportunity'
+              | 'Lead' | 'Account' | 'Contact' | 'Opportunity';
   /** Plain-Chinese label for the result dialog title. */
   objectLabel: string;
   /** Optional invalidate keys for the parent list query. */

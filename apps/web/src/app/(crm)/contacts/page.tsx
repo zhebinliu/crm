@@ -181,7 +181,7 @@ export default function ContactsPage() {
           <h1 className="text-3xl font-black tracking-tight text-ink">联系人</h1>
         </div>
         <div className="flex items-center gap-2">
-          <CsvImportButton objectApiName="Contact" objectLabel="联系人" invalidateKeys={['contacts']} />
+          <CsvImportButton objectApiName="contact" objectLabel="联系人" invalidateKeys={['contacts']} />
           <Button
             onClick={() => setCreateOpen(true)}
             className="bg-brand hover:bg-brand-deep text-white rounded-xl font-bold h-10 px-5"
@@ -193,7 +193,7 @@ export default function ContactsPage() {
       </div>
 
       <ListViewSelector
-        objectApiName="Contact"
+        objectApiName="contact"
         filters={filters}
         onApply={setFilters}
       />

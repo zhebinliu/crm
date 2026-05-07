@@ -19,6 +19,12 @@ class CreateFieldDto {
   @IsNumber() @IsOptional() scale?: number;
   @IsNumber() @IsOptional() displayOrder?: number;
   @IsOptional() defaultValue?: unknown;
+  /** Create a fresh picklist alongside this field. Use when type=PICKLIST/MULTI_PICKLIST and there's no existing picklistId. */
+  @IsOptional() picklistInline?: {
+    apiName?: string;
+    label?: string;
+    values: Array<{ value: string; label: string; color?: string; displayOrder?: number }>;
+  };
 }
 
 @ApiTags('admin')

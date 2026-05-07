@@ -379,7 +379,7 @@ export default function OpportunitiesPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <CsvImportButton objectApiName="Opportunity" objectLabel="商机" invalidateKeys={['opportunities']} />
+          <CsvImportButton objectApiName="opportunity" objectLabel="商机" invalidateKeys={['opportunities']} />
           <Button
             onClick={() => setModalOpen(true)}
             className="rounded-xl bg-brand hover:bg-brand-deep text-white h-11 px-6 font-bold shadow-xl shadow-brand/20 gap-2"
@@ -422,7 +422,7 @@ export default function OpportunitiesPage() {
       </div>
 
       <ListViewSelector
-        objectApiName="Opportunity"
+        objectApiName="opportunity"
         filters={filters}
         onApply={setFilters}
       />
@@ -492,7 +492,7 @@ export default function OpportunitiesPage() {
       <CreateRecordModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        objectApiName="Opportunity"
+        objectApiName="opportunity"
         onSuccess={() => {}}
       />
     </div>

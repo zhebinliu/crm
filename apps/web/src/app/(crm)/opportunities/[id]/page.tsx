@@ -236,7 +236,7 @@ function EditModal({ opp, open, onClose }: EditModalProps) {
 
           <CustomFieldsSection
             ref={customRef}
-            objectApiName="Opportunity"
+            objectApiName="opportunity"
             value={customFields}
             onChange={setCustomFields}
             initial={initialCustom}
@@ -945,7 +945,7 @@ export default function OpportunityDetailPage() {
               quoteLoading={quoteMutation.isPending}
             />
             <CustomFieldsCard
-              objectApiName="Opportunity"
+              objectApiName="opportunity"
               customFields={(opp as unknown as { customFields?: Record<string, unknown> | null }).customFields ?? null}
               saveFn={(patch) => oppsApi.update(id, patch)}
               onSaved={() => qc.invalidateQueries({ queryKey: ['opportunity', id] })}
