@@ -178,6 +178,96 @@ export class ClaudeClient {
     }
   }
 
+  // ── Streaming variant of chatStep ────────────────────────────────────────
+  // Same contract as chatStep but invokes onTextDelta(chunk) as text is
+  // produced. Returns the same ChatStepResult once the response completes.
+  // Stub fallback simulates a single message with no streaming effect.
+
+  async chatStepStream(
+    opts: {
+      system: string;
+      history: ChatTurn[];
+      tools?: ToolDef[];
+      maxTokens?: number;
+      cacheSystem?: boolean;
+    },
+    onTextDelta: (chunk: string) => void,
+  ): Promise<ChatStepResult> {
+    const t0 = Date.now();
+    if (!this.client) {
+      const text = '⚠️ AI 助手暂未配置（缺少 ANTHROPIC_API_KEY）。请联系管理员开启 LLM 接入。';
+      onTextDelta(text);
+      return {
+        blocks: [{ type: 'text', text }],
+        text,
+        toolUses: [],
+        stopReason: 'stub',
+        usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
+        latencyMs: Date.now() - t0,
+        modelName: `${this.defaultModel}-stub`,
+        source: 'stub',
+      };
+    }
+
+    const cacheSystem = opts.cacheSystem ?? opts.system.length >= CACHE_THRESHOLD_CHARS;
+    const systemBlocks = cacheSystem
+      ? ([{ type: 'text', text: opts.system, cache_control: { type: 'ephemeral' } }] as unknown as Anthropic.TextBlockParam[])
+      : [{ type: 'text' as const, text: opts.system }];
+
+    type AnthropicBlockArray = Array<
+      Anthropic.TextBlockParam
+      | Anthropic.ImageBlockParam
+      | Anthropic.ToolUseBlockParam
+      | Anthropic.ToolResultBlockParam
+    >;
+    const messages: Anthropic.MessageParam[] = opts.history.map((t) => ({
+      role: t.role,
+      content: typeof t.content === 'string'
+        ? t.content
+        : (t.content as unknown as AnthropicBlockArray),
+    }));
+
+    const stream = this.client.messages.stream({
+      model: this.defaultModel,
+      max_tokens: opts.maxTokens ?? 2048,
+      system: systemBlocks,
+      messages,
+      ...(opts.tools && opts.tools.length > 0 ? { tools: opts.tools } : {}),
+    });
+
+    stream.on('text', (delta) => {
+      onTextDelta(delta);
+    });
+
+    const final = await stream.finalMessage();
+
+    const blocks: ChatBlock[] = final.content.map((b) => {
+      if (b.type === 'text') return { type: 'text', text: b.text };
+      if (b.type === 'tool_use') return { type: 'tool_use', id: b.id, name: b.name, input: b.input };
+      return { type: 'text', text: '' };
+    });
+    const text = blocks.filter((b) => b.type === 'text').map((b) => (b as { text: string }).text).join('');
+    const toolUses = blocks
+      .filter((b): b is { type: 'tool_use'; id: string; name: string; input: unknown } => b.type === 'tool_use')
+      .map(({ id, name, input }) => ({ id, name, input }));
+
+    return {
+      blocks,
+      text,
+      toolUses,
+      stopReason: final.stop_reason ?? null,
+      usage: {
+        inputTokens: final.usage.input_tokens ?? 0,
+        outputTokens: final.usage.output_tokens ?? 0,
+        cacheReadTokens: (final.usage as { cache_read_input_tokens?: number }).cache_read_input_tokens ?? 0,
+        cacheWriteTokens: (final.usage as { cache_creation_input_tokens?: number }).cache_creation_input_tokens ?? 0,
+      },
+      latencyMs: Date.now() - t0,
+      modelName: this.defaultModel,
+      source: 'live',
+    };
+  }
+
   // ── Multi-turn chat with tool use ────────────────────────────────────────
 
   /**

@@ -6,8 +6,7 @@
 // message so users can audit what the AI actually queried.
 
 import { useEffect, useRef, useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
-import { aiApi } from '@/lib/api';
+import { aiApi, type ChatStreamEvent } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
@@ -32,19 +31,22 @@ interface ChatMessage {
   ts?: number;
 }
 
-interface ChatResponse {
-  assistant: ChatMessage;
-  history: ChatMessage[];
-  meta: {
-    modelName: string;
-    source: 'live' | 'stub';
-    totalLatencyMs: number;
-    iterations: number;
-    inputTokens: number;
-    outputTokens: number;
-    cacheReadTokens: number;
-    cacheWriteTokens: number;
-  };
+interface ChatMeta {
+  modelName: string;
+  source: 'live' | 'stub';
+  totalLatencyMs: number;
+  iterations: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+}
+
+interface ToolStatus {
+  name: string;
+  startedAt: number;
+  durationMs?: number;
+  isError?: boolean;
 }
 
 const STORAGE_KEY = 'tw_copilot_history_v1';
@@ -65,8 +67,12 @@ interface Props {
 export function CopilotPanel({ open, onClose }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState('');
-  const [meta, setMeta] = useState<ChatResponse['meta'] | null>(null);
+  const [meta, setMeta] = useState<ChatMeta | null>(null);
+  const [streaming, setStreaming] = useState(false);
+  const [streamingText, setStreamingText] = useState('');
+  const [activeTools, setActiveTools] = useState<ToolStatus[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const cancelStreamRef = useRef<(() => void) | null>(null);
 
   // Load on first mount
   useEffect(() => {
@@ -88,36 +94,75 @@ export function CopilotPanel({ open, onClose }: Props) {
     if (open && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, open]);
+  }, [messages, streamingText, activeTools, open]);
 
-  const send = useMutation({
-    mutationFn: (text: string) => aiApi.chat({
-      message: text,
-      // Only send the last 16 turns to keep tokens manageable.
-      history: messages.slice(-16).map((m) => ({ role: m.role, text: m.text })),
-    }) as Promise<ChatResponse>,
-    onMutate: (text) => {
-      const userMsg: ChatMessage = { role: 'user', text, ts: Date.now() };
-      setMessages((prev) => [...prev, userMsg]);
-      setDraft('');
-    },
-    onSuccess: (res) => {
-      setMessages((prev) => [...prev, { ...res.assistant, ts: Date.now() }]);
-      setMeta(res.meta);
-    },
-    onError: (err) => {
-      setMessages((prev) => [...prev, {
-        role: 'assistant',
-        text: `❌ 调用失败：${(err as Error).message}`,
-        ts: Date.now(),
-      }]);
-    },
-  });
+  // Cancel any in-flight stream when the panel unmounts.
+  useEffect(() => () => cancelStreamRef.current?.(), []);
+
+  function startStream(text: string) {
+    if (streaming) return;
+    const userMsg: ChatMessage = { role: 'user', text, ts: Date.now() };
+    setMessages((prev) => [...prev, userMsg]);
+    setDraft('');
+    setStreaming(true);
+    setStreamingText('');
+    setActiveTools([]);
+
+    const history = [...messages, userMsg].slice(-16).map((m) => ({ role: m.role, text: m.text }));
+    cancelStreamRef.current = aiApi.chatStream(
+      { message: text, history: history.slice(0, -1) /* drop the new user msg, server adds it */ },
+      (event: ChatStreamEvent) => {
+        switch (event.type) {
+          case 'token':
+            setStreamingText((prev) => prev + event.text);
+            break;
+          case 'turn_break':
+            // Persist the so-far text into a transient assistant turn? Skip — keep streaming buffer.
+            setStreamingText('');
+            break;
+          case 'tool_call_start':
+            setActiveTools((prev) => [...prev, { name: event.name, startedAt: Date.now() }]);
+            break;
+          case 'tool_call_end':
+            setActiveTools((prev) => prev.map((t) =>
+              t.name === event.name && t.durationMs == null
+                ? { ...t, durationMs: event.durationMs, isError: event.isError }
+                : t,
+            ));
+            break;
+          case 'done':
+            setMessages((prev) => [...prev, {
+              role: 'assistant',
+              text: event.assistant.text,
+              toolEvents: event.assistant.toolEvents,
+              ts: Date.now(),
+            }]);
+            setMeta(event.meta);
+            setStreaming(false);
+            setStreamingText('');
+            setActiveTools([]);
+            cancelStreamRef.current = null;
+            break;
+          case 'error':
+            setMessages((prev) => [...prev, {
+              role: 'assistant',
+              text: `❌ 调用失败：${event.message}`,
+              ts: Date.now(),
+            }]);
+            setStreaming(false);
+            setStreamingText('');
+            setActiveTools([]);
+            cancelStreamRef.current = null;
+            break;
+        }
+      },
+    );
+  }
 
   function handleSubmit() {
     const text = draft.trim();
-    if (!text || send.isPending) return;
-    send.mutate(text);
+    if (!text || streaming) return;
+    startStream(text);
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -131,7 +176,17 @@ export function CopilotPanel({ open, onClose }: Props) {
   function clearHistory() {
     setMessages([]);
     setMeta(null);
+    setStreamingText('');
+    setActiveTools([]);
     try { localStorage.removeItem(STORAGE_KEY); } catch {}
+  }
+
+  function stopStream() {
+    cancelStreamRef.current?.();
+    cancelStreamRef.current = null;
+    setStreaming(false);
+    setStreamingText('');
+    setActiveTools([]);
   }
 
   return (
@@ -185,16 +240,56 @@ export function CopilotPanel({ open, onClose }: Props) {
 
         {/* Messages */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-4 custom-scrollbar">
-          {messages.length === 0 && !send.isPending && (
-            <Welcome onPick={(text) => send.mutate(text)} />
+          {messages.length === 0 && !streaming && (
+            <Welcome onPick={(text) => startStream(text)} />
           )}
           {messages.map((m, i) => (
             <MessageBubble key={i} message={m} />
           ))}
-          {send.isPending && (
-            <div className="flex items-center gap-2 text-sm font-bold text-slate-400">
-              <Loader2 size={14} className="animate-spin text-violet-500" />
-              小销正在思考…
+
+          {/* Live streaming bubble */}
+          {streaming && (
+            <div className="flex gap-2.5 justify-start">
+              <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center text-white shrink-0 shadow-md shadow-violet-200/50">
+                <Sparkles size={13} />
+              </div>
+              <div className="max-w-[88%] rounded-2xl rounded-tl-sm bg-white border border-violet-100 px-4 py-2.5 shadow-sm">
+                {/* Active tool chips */}
+                {activeTools.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {activeTools.map((t, i) => (
+                      <span
+                        key={i}
+                        className={cn(
+                          'inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full',
+                          t.durationMs == null
+                            ? 'bg-violet-100 text-violet-600 animate-pulse'
+                            : t.isError
+                              ? 'bg-red-50 text-red-600'
+                              : 'bg-slate-100 text-slate-500',
+                        )}
+                      >
+                        <Wrench size={9} />
+                        {t.name}
+                        {t.durationMs != null && <span>· {t.durationMs}ms</span>}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Streaming text */}
+                {streamingText.length > 0 ? (
+                  <div className="text-sm font-medium leading-relaxed text-ink whitespace-pre-wrap">
+                    {streamingText}
+                    <span className="inline-block w-1 h-4 bg-violet-400 ml-0.5 align-middle animate-pulse" />
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-sm font-bold text-slate-400">
+                    <Loader2 size={12} className="animate-spin text-violet-500" />
+                    小销正在思考…
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -223,17 +318,29 @@ export function CopilotPanel({ open, onClose }: Props) {
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={handleKeyDown}
-              disabled={send.isPending}
+              disabled={streaming}
             />
-            <Button
-              type="button"
-              size="sm"
-              className="absolute right-2 bottom-2 h-9 w-9 rounded-xl p-0 bg-gradient-to-br from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 disabled:opacity-50 shadow-lg shadow-violet-200/50"
-              onClick={handleSubmit}
-              disabled={!draft.trim() || send.isPending}
-            >
-              {send.isPending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-            </Button>
+            {streaming ? (
+              <Button
+                type="button"
+                size="sm"
+                className="absolute right-2 bottom-2 h-9 w-9 rounded-xl p-0 bg-red-500 hover:bg-red-600 shadow-lg shadow-red-200/50"
+                onClick={stopStream}
+                title="停止"
+              >
+                <X size={14} />
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                size="sm"
+                className="absolute right-2 bottom-2 h-9 w-9 rounded-xl p-0 bg-gradient-to-br from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 disabled:opacity-50 shadow-lg shadow-violet-200/50"
+                onClick={handleSubmit}
+                disabled={!draft.trim()}
+              >
+                <Send size={14} />
+              </Button>
+            )}
           </div>
         </div>
       </aside>

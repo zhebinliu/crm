@@ -2,6 +2,30 @@ import axios from 'axios';
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
+// ── Streaming Copilot event union (mirrors apps/api/src/modules/ai/ai-chat.service.ts) ──
+
+export type ChatStreamEvent =
+  | { type: 'token'; text: string }
+  | { type: 'turn_break' }
+  | { type: 'tool_call_start'; name: string; input: unknown }
+  | { type: 'tool_call_end'; name: string; durationMs: number; isError?: boolean }
+  | {
+      type: 'done';
+      assistant: { role: 'user' | 'assistant'; text: string; toolEvents?: Array<{ name: string; input: unknown; result: string; isError?: boolean; durationMs: number }> };
+      history: Array<{ role: 'user' | 'assistant'; text: string }>;
+      meta: {
+        modelName: string;
+        source: 'live' | 'stub';
+        totalLatencyMs: number;
+        iterations: number;
+        inputTokens: number;
+        outputTokens: number;
+        cacheReadTokens: number;
+        cacheWriteTokens: number;
+      };
+    }
+  | { type: 'error'; message: string };
+
 export const api = axios.create({
   baseURL: `${BASE}/api`,
   headers: { 'Content-Type': 'application/json' },
@@ -220,8 +244,70 @@ export const aiApi = {
     api.post(`/ai/leads/${leadId}/draft-outreach`, args).then((r) => r.data),
   pipelineRisk: (params?: { ownerId?: string; stage?: string; limit?: number }) =>
     api.get('/ai/pipeline-risk', { params }).then((r) => r.data),
+  oppBandsByIds: (ids: string[]) =>
+    api.post('/ai/opportunities/bands', { ids }).then((r) => r.data),
+  dashboardSummary: (mineOnly?: boolean) =>
+    api.get('/ai/dashboard-summary', { params: mineOnly ? { mineOnly: 'true' } : {} }).then((r) => r.data),
   chat: (body: { message: string; history?: Array<{ role: 'user' | 'assistant'; text: string }> }) =>
     api.post('/ai/chat', body, { timeout: 120_000 }).then((r) => r.data),
+  /**
+   * Stream variant. Returns a cancel function. `onEvent` is called for each
+   * server-sent event. The stream ends with a 'done' or 'error' event.
+   */
+  chatStream(
+    body: { message: string; history?: Array<{ role: 'user' | 'assistant'; text: string }> },
+    onEvent: (event: ChatStreamEvent) => void,
+  ): () => void {
+    const ac = new AbortController();
+    (async () => {
+      try {
+        const token = typeof window !== 'undefined'
+          ? localStorage.getItem('tw_access_token')
+          : null;
+        const resp = await fetch(`${BASE}/api/ai/chat/stream`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify(body),
+          signal: ac.signal,
+        });
+        if (!resp.ok || !resp.body) {
+          const msg = await resp.text().catch(() => `HTTP ${resp.status}`);
+          onEvent({ type: 'error', message: msg });
+          return;
+        }
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let buf = '';
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          // SSE messages are separated by blank lines.
+          let idx: number;
+          while ((idx = buf.indexOf('\n\n')) !== -1) {
+            const raw = buf.slice(0, idx);
+            buf = buf.slice(idx + 2);
+            const dataLine = raw.split('\n').find((l) => l.startsWith('data:'));
+            if (!dataLine) continue;
+            const json = dataLine.slice(5).trim();
+            try {
+              const parsed = JSON.parse(json);
+              onEvent(parsed as ChatStreamEvent);
+            } catch {
+              // ignore malformed line
+            }
+          }
+        }
+      } catch (e) {
+        if ((e as { name?: string }).name === 'AbortError') return;
+        onEvent({ type: 'error', message: (e as Error).message ?? String(e) });
+      }
+    })();
+    return () => ac.abort();
+  },
 };
 
 export const genericApi = {
