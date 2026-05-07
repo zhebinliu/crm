@@ -42,6 +42,7 @@ import { CampaignModule } from './modules/campaign/campaign.module';
 import { BulkModule } from './modules/bulk/bulk.module';
 import { FormulaModule } from './modules/formula/formula.module';
 import { PersonModule } from './modules/person/person.module';
+import { EventsModule } from './modules/events/events.module';
 
 import { HealthController } from './health.controller';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
@@ -69,7 +70,12 @@ import { PermissionsGuard } from './common/guards/permissions.guard';
       autoSchemaFile: join(process.cwd(), 'src/schema.gql'),
       sortSchema: true,
       playground: true,
-      context: ({ req, res }) => ({ req, res }),
+      context: ({ req, res, connectionParams, extra }) =>
+        connectionParams ? { connectionParams, extra } : { req, res },
+      // Real-time subscriptions over GraphQL-WS (modern protocol).
+      subscriptions: {
+        'graphql-ws': true,
+      },
     }),
 
     PrismaModule,
@@ -105,6 +111,7 @@ import { PermissionsGuard } from './common/guards/permissions.guard';
     BulkModule,
     FormulaModule,
     PersonModule,
+    EventsModule,
   ],
   controllers: [HealthController],
   providers: [

@@ -1744,3 +1744,46 @@ model DedupeCandidate {
   @@index([tenantId, sourceType, sourceId])
   @@map("dedupe_candidates")
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// INBOUND WEBHOOK ENDPOINTS
+// ════════════════════════════════════════════════════════════════════════════
+// Tenants register endpoints to which downstream systems POST. Each has a
+// unique slug + signingSecret + optional eventType label. Inbound traffic
+// hits POST /webhooks/inbound/:slug, gets HMAC-verified, persisted, and
+// fanned out to the platform event bus.
+
+model WebhookEndpoint {
+  id            String   @id @default(cuid())
+  tenantId      String
+  slug          String   @unique // path component
+  description   String?
+  signingSecret String              // shared with caller for HMAC verification
+  eventType     String?             // label inserted into the dispatched event name
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  inboundEvents WebhookInboundEvent[]
+
+  @@index([tenantId, isActive])
+  @@map("webhook_endpoints")
+}
+
+model WebhookInboundEvent {
+  id             String          @id @default(cuid())
+  tenantId       String
+  endpointId     String
+  endpoint       WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+  idempotencyKey String
+  headers        Json            @default("{}")
+  body           String          // raw JSON body
+  receivedAt     DateTime
+  processedAt    DateTime?
+  attempts       Int             @default(0)
+  lastError      String?
+  createdAt      DateTime        @default(now())
+
+  @@unique([tenantId, endpointId, idempotencyKey])
+  @@index([tenantId, processedAt, createdAt])
+  @@map("webhook_inbound_events")
+}
