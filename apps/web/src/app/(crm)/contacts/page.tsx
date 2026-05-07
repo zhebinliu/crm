@@ -9,6 +9,7 @@ import { Plus, User, Mail, Phone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CreateRecordModal } from '@/components/dynamic/create-record-modal';
 import { FilterBar, FilterField } from '@/components/crm/filter-bar';
+import { ListViewSelector } from '@/components/crm/list-view-selector';
 import { DataTable, Column } from '@/components/crm/data-table';
 
 const CONTACT_FILTERS: FilterField[] = [
@@ -186,6 +187,12 @@ export default function ContactsPage() {
           新建联系人
         </Button>
       </div>
+
+      <ListViewSelector
+        objectApiName="Contact"
+        filters={filters}
+        onApply={setFilters}
+      />
 
       {/* Filter Bar */}
       <FilterBar

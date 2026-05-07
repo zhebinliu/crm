@@ -229,6 +229,23 @@ export const emailTemplatesApi = {
   remove: (id: string) => api.delete(`/admin/email-templates/${id}`).then((r) => r.data),
 };
 
+export const listViewsApi = {
+  list: (objectApiName: string) =>
+    api.get('/list-views', { params: { objectApiName } }).then((r) => r.data),
+  create: (data: {
+    objectApiName: string;
+    name: string;
+    filters?: Record<string, unknown>;
+    sortBy?: string | null;
+    sortDir?: 'asc' | 'desc' | null;
+    isShared?: boolean;
+    isDefault?: boolean;
+  }) => api.post('/list-views', data).then((r) => r.data),
+  update: (id: string, data: Record<string, unknown>) =>
+    api.put(`/list-views/${id}`, data).then((r) => r.data),
+  remove: (id: string) => api.delete(`/list-views/${id}`).then((r) => r.data),
+};
+
 export const notificationsApi = {
   list: (unreadOnly?: boolean, take?: number) =>
     api.get('/notifications', { params: { unreadOnly: unreadOnly ? 'true' : undefined, take } }).then((r) => r.data),

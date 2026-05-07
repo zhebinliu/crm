@@ -33,6 +33,7 @@ import { EmailTemplateModule } from './modules/email-template/email-template.mod
 import { ForecastModule } from './modules/forecast/forecast.module';
 import { AiModule } from './modules/ai/ai.module';
 import { NotificationModule } from './modules/notification/notification.module';
+import { ListViewModule } from './modules/list-view/list-view.module';
 
 import { HealthController } from './health.controller';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
@@ -88,6 +89,7 @@ import { PermissionsGuard } from './common/guards/permissions.guard';
     ForecastModule,
     AiModule,
     NotificationModule,
+    ListViewModule,
   ],
   controllers: [HealthController],
   providers: [
