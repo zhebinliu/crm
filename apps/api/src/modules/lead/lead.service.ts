@@ -8,6 +8,7 @@ import { AuditService } from '../workflow/audit.service';
 import { OutboxService } from '../../common/outbox.service';
 import { IdentityResolutionService } from '../person/identity-resolution.service';
 import { EVENTS } from '@tokenwave/shared';
+import { FlsService } from '../fls/fls.service';
 import type { RequestUser } from '../../common/types/request-context';
 
 export interface LeadListOptions {
@@ -37,11 +38,12 @@ export class LeadService extends BaseEntityService {
     emitter: EventEmitter2,
     outbox: OutboxService,
     private readonly identity: IdentityResolutionService,
+    private readonly fls: FlsService,
   ) {
     super(workflow, validation, audit, emitter, outbox);
   }
 
-  async list(tenantId: string, opts: LeadListOptions = {}) {
+  async list(tenantId: string, opts: LeadListOptions = {}, user?: RequestUser) {
     const { search, status, ownerId, isConverted, skip = 0, take = 20 } = opts;
 
     const where = {
@@ -67,16 +69,22 @@ export class LeadService extends BaseEntityService {
       this.prisma.lead.count({ where }),
     ]);
 
+    // Wave 16a: strip FLS-gated fields from each row.
+    await this.fls.filterReadableMany(user, 'lead', data as unknown as Record<string, unknown>[]);
     return { data, total };
   }
 
-  async get(tenantId: string, id: string) {
+  async get(tenantId: string, id: string, user?: RequestUser) {
     const lead = await this.prisma.lead.findFirst({ where: { id, tenantId, deletedAt: null } });
     if (!lead) throw new NotFoundException(`Lead ${id} not found`);
+    // Wave 16a: strip FLS-gated fields. No-op if user not provided.
+    await this.fls.filterReadable(user, 'lead', lead as unknown as Record<string, unknown>);
     return lead;
   }
 
   async create(tenantId: string, input: Record<string, unknown>, user: RequestUser) {
+    // Wave 16a: reject writes to fields the user lacks writePermission for.
+    await this.fls.assertWritable(user, 'lead', input);
     await this.beforeSave(tenantId, 'lead', input, undefined, user);
     const data = {
       ...input,
@@ -109,6 +117,9 @@ export class LeadService extends BaseEntityService {
   }
 
   async update(tenantId: string, id: string, input: Record<string, unknown>, user: RequestUser) {
+    // Wave 16a: reject writes to fields the user lacks writePermission for.
+    await this.fls.assertWritable(user, 'lead', input);
+    // Internal previous-fetch — pass no user so we get the unfiltered record for diffing.
     const previous = await this.get(tenantId, id);
     await this.beforeSave(tenantId, 'lead', input, previous as Record<string, unknown>, user);
     const lead = await this.prisma.lead.update({

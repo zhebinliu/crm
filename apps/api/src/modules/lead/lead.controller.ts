@@ -156,14 +156,18 @@ export class LeadController {
 
   @Get()
   @RequirePermissions('lead.read')
-  list(@TenantId() tenantId: string, @Query() query: ListLeadsQuery) {
-    return this.leadService.list(tenantId, query);
+  list(
+    @TenantId() tenantId: string,
+    @Query() query: ListLeadsQuery,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.leadService.list(tenantId, query, user);
   }
 
   @Get(':id')
   @RequirePermissions('lead.read')
-  get(@TenantId() tenantId: string, @Param('id') id: string) {
-    return this.leadService.get(tenantId, id);
+  get(@TenantId() tenantId: string, @Param('id') id: string, @CurrentUser() user: RequestUser) {
+    return this.leadService.get(tenantId, id, user);
   }
 
   @Post()

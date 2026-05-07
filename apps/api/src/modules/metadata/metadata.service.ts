@@ -2,12 +2,14 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../../prisma/prisma.service';
 import { FieldType } from '@prisma/client';
 import { FormulaService } from '../formula/formula.service';
+import { FlsService } from '../fls/fls.service';
 
 @Injectable()
 export class MetadataService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly formula: FormulaService,
+    private readonly fls: FlsService,
   ) {}
 
   // ── Objects ───────────────────────────────────────────────────────────────
@@ -147,6 +149,10 @@ export class MetadataService {
     });
     // Invalidate the formula-fields cache so newly added FORMULA fields show up.
     if (data.type === 'FORMULA') this.formula.invalidate(tenantId, objectApiName);
+    // Wave 16a: invalidate the FLS cache when a field with read/writePermission is created.
+    if (data.readPermission || data.writePermission) {
+      this.fls.invalidate(tenantId, objectApiName);
+    }
     return created;
   }
 
@@ -168,6 +174,10 @@ export class MetadataService {
     if (existing.type === 'FORMULA' && 'formulaExpr' in patch) {
       this.formula.invalidate(tenantId, existing.object.apiName);
     }
+    // Wave 16a: invalidate the FLS cache whenever read/writePermission changes.
+    if ('readPermission' in patch || 'writePermission' in patch) {
+      this.fls.invalidate(tenantId, existing.object.apiName);
+    }
     return updated;
   }
 
@@ -180,6 +190,10 @@ export class MetadataService {
     if (f.isStandard) throw new BadRequestException({ code: 'CONFLICT', message: 'Cannot delete standard field' });
     await this.prisma.fieldDef.delete({ where: { id: fieldId } });
     if (f.type === 'FORMULA') this.formula.invalidate(tenantId, f.object.apiName);
+    // Wave 16a: invalidate FLS cache if this field had any read/writePermission gate.
+    if (f.readPermission || f.writePermission) {
+      this.fls.invalidate(tenantId, f.object.apiName);
+    }
     return { ok: true };
   }
 
