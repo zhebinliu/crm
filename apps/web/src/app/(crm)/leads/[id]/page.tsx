@@ -246,7 +246,7 @@ export default function LeadDetailPage() {
 
       {/* Custom fields (admin-defined) */}
       <CustomFieldsCard
-        objectApiName="Lead"
+        objectApiName="lead"
         customFields={lead.customFields as Record<string, unknown> | null}
         saveFn={(patch) => leadsApi.update(id, patch)}
         onSaved={() => queryClient.invalidateQueries({ queryKey: ['lead', id] })}

@@ -162,7 +162,7 @@ export function LeadFormModal({ open, onClose, lead, onSuccess }: LeadFormModalP
 
           <CustomFieldsSection
             ref={customRef}
-            objectApiName="Lead"
+            objectApiName="lead"
             value={customFields}
             onChange={setCustomFields}
             initial={lead?.customFields ?? null}

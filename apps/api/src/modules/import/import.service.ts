@@ -162,8 +162,8 @@ export class ImportService {
       }
 
       try {
-        switch (objectApiName) {
-          case 'Lead': {
+        switch (objectApiName.toLowerCase()) {
+          case 'lead': {
             // Lead requires lastName + company
             if (!payload.lastName || !payload.company) {
               throw new Error('缺少必填字段 lastName / company');
@@ -171,17 +171,17 @@ export class ImportService {
             await this.leads.create(tenantId, payload, user);
             break;
           }
-          case 'Account': {
+          case 'account': {
             if (!payload.name) throw new Error('缺少必填字段 name');
             await this.accounts.create(tenantId, payload, user);
             break;
           }
-          case 'Contact': {
+          case 'contact': {
             if (!payload.lastName) throw new Error('缺少必填字段 lastName');
             await this.contacts.create(tenantId, payload, user);
             break;
           }
-          case 'Opportunity': {
+          case 'opportunity': {
             if (!payload.name) throw new Error('缺少必填字段 name');
             // accountId column may contain a name instead of an ID — try to resolve
             if (payload.accountId && typeof payload.accountId === 'string' && !payload.accountId.startsWith('c')) {
@@ -216,11 +216,11 @@ export class ImportService {
   }
 
   private aliasesFor(objectApiName: string): Record<string, string> | null {
-    switch (objectApiName) {
-      case 'Lead':        return LEAD_ALIASES;
-      case 'Account':     return ACCOUNT_ALIASES;
-      case 'Contact':     return CONTACT_ALIASES;
-      case 'Opportunity': return OPP_ALIASES;
+    switch (objectApiName.toLowerCase()) {
+      case 'lead':        return LEAD_ALIASES;
+      case 'account':     return ACCOUNT_ALIASES;
+      case 'contact':     return CONTACT_ALIASES;
+      case 'opportunity': return OPP_ALIASES;
       default:            return null;
     }
   }

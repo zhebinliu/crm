@@ -197,7 +197,7 @@ function ContactFormModal({
 
           <CustomFieldsSection
             ref={customRef}
-            objectApiName="Contact"
+            objectApiName="contact"
             value={customFields}
             onChange={setCustomFields}
             initial={(initial as { customFields?: Record<string, unknown> } | undefined)?.customFields ?? null}
@@ -471,7 +471,7 @@ export default function ContactDetailPage() {
             )}
 
             <CustomFieldsCard
-              objectApiName="Contact"
+              objectApiName="contact"
               customFields={(contact as unknown as { customFields?: Record<string, unknown> | null }).customFields ?? null}
               saveFn={(patch) => contactsApi.update(id, patch)}
               onSaved={() => qc.invalidateQueries({ queryKey: ['contact', id] })}

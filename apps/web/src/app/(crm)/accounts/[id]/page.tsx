@@ -187,7 +187,7 @@ function AccountFormModal({
 
           <CustomFieldsSection
             ref={customRef}
-            objectApiName="Account"
+            objectApiName="account"
             value={customFields}
             onChange={setCustomFields}
             initial={(initial as { customFields?: Record<string, unknown> } | undefined)?.customFields ?? null}
@@ -472,7 +472,7 @@ export default function AccountDetailPage() {
             )}
 
             <CustomFieldsCard
-              objectApiName="Account"
+              objectApiName="account"
               customFields={(account as unknown as { customFields?: Record<string, unknown> | null }).customFields ?? null}
               saveFn={(patch) => accountsApi.update(id, patch)}
               onSaved={() => qc.invalidateQueries({ queryKey: ['account', id] })}

@@ -17,10 +17,15 @@ export class MetadataService {
   }
 
   async getObject(tenantId: string, apiName: string) {
-    const obj = await this.prisma.objectDef.findFirstOrThrow({
-      where: { tenantId, apiName },
+    // Standard objects are stored lowercase; tolerate either case from callers.
+    const obj = await this.prisma.objectDef.findFirst({
+      where: {
+        tenantId,
+        OR: [{ apiName }, { apiName: apiName.toLowerCase() }],
+      },
       include: { fields: { orderBy: { displayOrder: 'asc' } } },
     });
+    if (!obj) throw new NotFoundException({ code: 'NOT_FOUND', message: `Object ${apiName} not found` });
 
     // Discover child relationships (Related Lists)
     // Find all fields in other objects that point to this object as a REFERENCE
@@ -88,14 +93,50 @@ export class MetadataService {
     helpText?: string; picklistId?: string; referenceTo?: string;
     formulaExpr?: string; precision?: number; scale?: number;
     readPermission?: string; writePermission?: string; displayOrder?: number;
+    /** Create a new Picklist + values inline (used when type=PICKLIST/MULTI_PICKLIST and picklistId is empty). */
+    picklistInline?: {
+      apiName?: string;
+      label?: string;
+      values: Array<{ value: string; label: string; color?: string; displayOrder?: number }>;
+    };
   }) {
     const obj = await this.prisma.objectDef.findFirst({ where: { tenantId, apiName: objectApiName } });
     if (!obj) throw new NotFoundException({ code: 'NOT_FOUND', message: 'Object not found' });
+
+    // For PICKLIST / MULTI_PICKLIST without picklistId but with inline values,
+    // create a fresh picklist on the fly. apiName defaults to <object>_<field>.
+    let picklistId = data.picklistId;
+    if (!picklistId
+        && (data.type === 'PICKLIST' || data.type === 'MULTI_PICKLIST')
+        && data.picklistInline?.values?.length) {
+      const pk = await this.prisma.picklist.create({
+        data: {
+          tenantId,
+          apiName: data.picklistInline.apiName || `${objectApiName}_${data.apiName}`.toLowerCase(),
+          label: data.picklistInline.label || data.label,
+          values: {
+            create: data.picklistInline.values.map((v, i) => ({
+              value: v.value,
+              label: v.label,
+              color: v.color,
+              displayOrder: v.displayOrder ?? i,
+            })),
+          },
+        },
+      });
+      picklistId = pk.id;
+    }
+
+    // Strip the inline payload before passing to Prisma.
+    const { picklistInline: _ignore, ...fieldData } = data;
+    void _ignore;
+
     return this.prisma.fieldDef.create({
       data: {
         tenantId,
         objectId: obj.id,
-        ...data,
+        ...fieldData,
+        picklistId,
         defaultValue: data.defaultValue as object | undefined,
         isCustom: true,
       },
@@ -131,8 +172,10 @@ export class MetadataService {
     const out: Record<string, { name: string; secondary?: string }> = {};
     const safeIds = ids.slice(0, 200);
 
-    switch (objectApiName) {
-      case 'Account': {
+    // Standard objects are stored lowercase in ObjectDef.apiName, but callers
+    // may pass either case. Normalize.
+    switch (objectApiName.toLowerCase()) {
+      case 'account': {
         const rows = await this.prisma.account.findMany({
           where: { tenantId, id: { in: safeIds }, deletedAt: null },
           select: { id: true, name: true, industry: true },
@@ -140,7 +183,7 @@ export class MetadataService {
         for (const r of rows) out[r.id] = { name: r.name, secondary: r.industry ?? undefined };
         break;
       }
-      case 'Contact': {
+      case 'contact': {
         const rows = await this.prisma.contact.findMany({
           where: { tenantId, id: { in: safeIds }, deletedAt: null },
           select: { id: true, firstName: true, lastName: true, title: true },
@@ -153,7 +196,7 @@ export class MetadataService {
         }
         break;
       }
-      case 'Lead': {
+      case 'lead': {
         const rows = await this.prisma.lead.findMany({
           where: { tenantId, id: { in: safeIds }, deletedAt: null },
           select: { id: true, firstName: true, lastName: true, company: true },
@@ -167,7 +210,7 @@ export class MetadataService {
         }
         break;
       }
-      case 'Opportunity': {
+      case 'opportunity': {
         const rows = await this.prisma.opportunity.findMany({
           where: { tenantId, id: { in: safeIds }, deletedAt: null },
           select: { id: true, name: true, stage: true },
@@ -175,7 +218,7 @@ export class MetadataService {
         for (const r of rows) out[r.id] = { name: r.name, secondary: r.stage };
         break;
       }
-      case 'Quote': {
+      case 'quote': {
         const rows = await this.prisma.quote.findMany({
           where: { tenantId, id: { in: safeIds }, deletedAt: null },
           select: { id: true, quoteNumber: true, status: true },
@@ -183,7 +226,7 @@ export class MetadataService {
         for (const r of rows) out[r.id] = { name: r.quoteNumber, secondary: r.status };
         break;
       }
-      case 'Order': {
+      case 'order': {
         const rows = await this.prisma.order.findMany({
           where: { tenantId, id: { in: safeIds }, deletedAt: null },
           select: { id: true, orderNumber: true, status: true },
@@ -191,7 +234,7 @@ export class MetadataService {
         for (const r of rows) out[r.id] = { name: r.orderNumber, secondary: r.status };
         break;
       }
-      case 'User': {
+      case 'user': {
         const rows = await this.prisma.user.findMany({
           where: { tenantId, id: { in: safeIds }, deletedAt: null },
           select: { id: true, displayName: true, email: true },
@@ -199,7 +242,7 @@ export class MetadataService {
         for (const r of rows) out[r.id] = { name: r.displayName, secondary: r.email };
         break;
       }
-      case 'Product': {
+      case 'product': {
         const rows = await this.prisma.product.findMany({
           where: { tenantId, id: { in: safeIds } },
           select: { id: true, name: true, code: true },
