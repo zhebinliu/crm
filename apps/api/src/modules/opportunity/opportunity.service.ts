@@ -11,6 +11,7 @@ import { EVENTS, STAGE_PROBABILITY, STAGE_FORECAST } from '@tokenwave/shared';
 import type { OpportunityStage } from '@tokenwave/shared';
 import type { RequestUser } from '../../common/types/request-context';
 import { RecycleBinService } from '../recycle-bin/recycle-bin.service';
+import { EmbeddingService, opportunityContent } from '../embeddings/embedding.service';
 
 export interface OppListOptions {
   search?: string;
@@ -42,8 +43,29 @@ export class OpportunityService extends BaseEntityService {
     emitter: EventEmitter2,
     outbox: OutboxService,
     recycleBin: RecycleBinService,
+    embeddings: EmbeddingService,
   ) {
     super(workflow, validation, audit, emitter, outbox, recycleBin);
+    this.embeddings = embeddings;
+  }
+
+  /** Project an Opportunity into the text we embed for RAG. */
+  protected buildEmbeddingContent(
+    objectApiName: string,
+    record: Record<string, unknown>,
+  ): string | null {
+    if (objectApiName !== 'opportunity') return null;
+    const account = record['account'] as { name?: string | null } | undefined;
+    return opportunityContent({
+      name: record['name'] as string | null,
+      stage: record['stage'] as string | null,
+      amount: record['amount'],
+      accountName: account?.name ?? null,
+      type: record['type'] as string | null,
+      leadSource: record['leadSource'] as string | null,
+      nextStep: record['nextStep'] as string | null,
+      description: record['description'] as string | null,
+    });
   }
 
   async list(tenantId: string, opts: OppListOptions = {}) {

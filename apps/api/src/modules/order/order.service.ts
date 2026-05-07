@@ -9,6 +9,7 @@ import { AuditService } from '../workflow/audit.service';
 import { OutboxService } from '../../common/outbox.service';
 import { EVENTS } from '@tokenwave/shared';
 import type { RequestUser } from '../../common/types/request-context';
+import { RecycleBinService } from '../recycle-bin/recycle-bin.service';
 
 export interface OrderListOptions {
   accountId?: string;
@@ -27,8 +28,9 @@ export class OrderService extends BaseEntityService {
     audit: AuditService,
     emitter: EventEmitter2,
     outbox: OutboxService,
+    recycleBin: RecycleBinService,
   ) {
-    super(workflow, validation, audit, emitter, outbox);
+    super(workflow, validation, audit, emitter, outbox, recycleBin);
   }
 
   async list(tenantId: string, opts: OrderListOptions = {}) {
@@ -164,9 +166,10 @@ export class OrderService extends BaseEntityService {
     return order;
   }
 
-  async softDelete(tenantId: string, id: string) {
-    await this.get(tenantId, id);
+  async softDelete(tenantId: string, id: string, user?: RequestUser) {
+    const previous = await this.get(tenantId, id);
     await this.prisma.order.update({ where: { id }, data: { deletedAt: new Date() } });
+    await this.afterSoftDelete(tenantId, 'order', previous as Record<string, unknown>, user);
   }
 
   private async nextOrderNumber(tenantId: string): Promise<string> {
