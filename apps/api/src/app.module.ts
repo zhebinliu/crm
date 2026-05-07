@@ -37,6 +37,8 @@ import { NotificationModule } from './modules/notification/notification.module';
 import { ListViewModule } from './modules/list-view/list-view.module';
 import { ImportModule } from './modules/import/import.module';
 import { SharingModule } from './modules/sharing/sharing.module';
+import { CaseModule } from './modules/case/case.module';
+import { CampaignModule } from './modules/campaign/campaign.module';
 
 import { HealthController } from './health.controller';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
@@ -95,6 +97,8 @@ import { PermissionsGuard } from './common/guards/permissions.guard';
     ListViewModule,
     ImportModule,
     SharingModule,
+    CaseModule,
+    CampaignModule,
   ],
   controllers: [HealthController],
   providers: [

@@ -26,6 +26,8 @@ export const OBJECTS = [
   'user',
   'role',
   'ai',
+  'case',
+  'campaign',
 ] as const;
 export type PermissionObject = (typeof OBJECTS)[number];
 
@@ -59,6 +61,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, PermissionCode[]> = {
     'user.read',
     'ai.invoke',
     'ai.read',
+    'case.*',
+    'campaign.*',
   ],
   sales_rep: [
     'lead.read',
@@ -78,6 +82,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, PermissionCode[]> = {
     'activity.*',
     'ai.invoke',
     'ai.read',
+    'case.read',
+    'case.write',
+    'campaign.read',
   ],
   approver: ['approval.approve', 'opportunity.read', 'quote.read', 'order.read', 'contract.read'],
   read_only: [
