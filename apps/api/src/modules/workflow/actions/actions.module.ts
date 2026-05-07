@@ -8,10 +8,13 @@ import { EmitEventAction } from './executors/emit-event.action';
 import { SendNotificationAction } from './executors/send-notification.action';
 import { SubmitForApprovalAction } from './executors/submit-for-approval.action';
 import { LogAction } from './executors/log.action';
+import { AiGenerateInsightAction } from './executors/ai-generate-insight.action';
+import { AiModule } from '../../ai/ai.module';
 
 export const ACTION_REGISTRY = Symbol('ACTION_REGISTRY');
 
 @Module({
+  imports: [AiModule],
   providers: [
     RecordMutatorService,
     FieldUpdateAction,
@@ -21,6 +24,7 @@ export const ACTION_REGISTRY = Symbol('ACTION_REGISTRY');
     SendNotificationAction,
     SubmitForApprovalAction,
     LogAction,
+    AiGenerateInsightAction,
     {
       provide: ACTION_REGISTRY,
       useFactory: (
@@ -31,6 +35,7 @@ export const ACTION_REGISTRY = Symbol('ACTION_REGISTRY');
         notif: SendNotificationAction,
         submitApproval: SubmitForApprovalAction,
         logAct: LogAction,
+        aiGen: AiGenerateInsightAction,
       ) => {
         const reg = new ActionRegistry();
         reg.register(fieldUpdate);
@@ -40,6 +45,7 @@ export const ACTION_REGISTRY = Symbol('ACTION_REGISTRY');
         reg.register(notif);
         reg.register(submitApproval);
         reg.register(logAct);
+        reg.register(aiGen);
         return reg;
       },
       inject: [
@@ -50,6 +56,7 @@ export const ACTION_REGISTRY = Symbol('ACTION_REGISTRY');
         SendNotificationAction,
         SubmitForApprovalAction,
         LogAction,
+        AiGenerateInsightAction,
       ],
     },
   ],

@@ -11,6 +11,7 @@ import { WorkflowCronService } from './workflow-cron.service';
 import { RecordMutatorService } from './record-mutator.service';
 import { ActionsModule } from './actions/actions.module';
 import { AuditService } from './audit.service';
+import { AuditLogController } from './audit-log.controller';
 
 @Module({
   imports: [
@@ -27,7 +28,7 @@ import { AuditService } from './audit.service';
     WorkflowRuleResolver,
     ValidationRuleResolver,
   ],
-  controllers: [WorkflowController, ValidationRuleController],
+  controllers: [WorkflowController, ValidationRuleController, AuditLogController],
   exports: [WorkflowService, ValidationRuleService, AuditService, RecordMutatorService],
 })
 export class WorkflowModule {}

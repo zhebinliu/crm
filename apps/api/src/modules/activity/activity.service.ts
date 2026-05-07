@@ -6,6 +6,7 @@ import { WorkflowService } from '../workflow/workflow.service';
 import { ValidationRuleService } from '../workflow/validation-rule.service';
 import { AuditService } from '../workflow/audit.service';
 import { OutboxService } from '../../common/outbox.service';
+import { AiService } from '../ai/ai.service';
 import type { RequestUser } from '../../common/types/request-context';
 import { ActivityType, ActivityStatus } from '@prisma/client';
 
@@ -29,6 +30,7 @@ export class ActivityService extends BaseEntityService {
     audit: AuditService,
     emitter: EventEmitter2,
     outbox: OutboxService,
+    private readonly ai: AiService,
   ) {
     super(workflow, validation, audit, emitter, outbox);
   }
@@ -118,6 +120,16 @@ export class ActivityService extends BaseEntityService {
     });
 
     await this.afterUpdate(tenantId, 'activity', activity as Record<string, unknown>, previous as Record<string, unknown>, user);
+
+    // Fire-and-forget AI auto-summary if description is empty. Wraps in
+    // setImmediate so the HTTP response returns instantly; LLM latency
+    // (typically 2-8s) doesn't block the user.
+    if (!activity.description || activity.description.trim().length === 0) {
+      setImmediate(() => {
+        this.ai.writeActivityCompletionSummary(tenantId, activity.id).catch(() => null);
+      });
+    }
+
     return activity;
   }
 
