@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -9,6 +9,7 @@ import { ActivityTimeline } from '@/components/crm/activity-timeline';
 import { OppWinProbabilityCard } from '@/components/ai/opp-win-probability-card';
 import { OppActivitySummaryCard } from '@/components/ai/opp-activity-summary-card';
 import { CustomFieldsCard } from '@/components/dynamic/custom-fields-card';
+import { CustomFieldsSection, type CustomFieldsSectionHandle } from '@/components/dynamic/custom-fields-section';
 import { fmtDate, fmtMoney, stageColor, cn } from '@/lib/utils';
 import {
   Card, CardContent, CardHeader, CardTitle,
@@ -105,6 +106,9 @@ function EditModal({ opp, open, onClose }: EditModalProps) {
     description: opp.description ?? '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const initialCustom = (opp as unknown as { customFields?: Record<string, unknown> | null }).customFields ?? {};
+  const [customFields, setCustomFields] = useState<Record<string, unknown>>(initialCustom);
+  const customRef = useRef<CustomFieldsSectionHandle>(null);
 
   const mutation = useMutation({
     mutationFn: (payload: Record<string, unknown>) => oppsApi.update(opp.id, payload),
@@ -125,15 +129,20 @@ function EditModal({ opp, open, onClose }: EditModalProps) {
     const errs: Record<string, string> = {};
     if (!form.name.trim()) errs.name = '商机名称不能为空';
     if (Object.keys(errs).length) { setErrors(errs); return; }
+    if (customRef.current && !customRef.current.validate()) return;
 
-    mutation.mutate({
+    const payload: Record<string, unknown> = {
       name: form.name.trim(),
       stage: form.stage,
       amount: form.amount ? Number(form.amount) : undefined,
       closeDate: form.closeDate || undefined,
       probability: form.probability ? Number(form.probability) : undefined,
       description: form.description.trim() || undefined,
-    });
+    };
+    if (Object.keys(customFields).length > 0) {
+      payload.customFields = customFields;
+    }
+    mutation.mutate(payload);
   }
 
   return (
@@ -223,6 +232,14 @@ function EditModal({ opp, open, onClose }: EditModalProps) {
               className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 resize-none"
             />
           </div>
+
+          <CustomFieldsSection
+            ref={customRef}
+            objectApiName="Opportunity"
+            value={customFields}
+            onChange={setCustomFields}
+            initial={initialCustom}
+          />
 
           {mutation.isError && (
             <p className="text-sm text-red-500 bg-red-50 px-4 py-2 rounded-xl">
