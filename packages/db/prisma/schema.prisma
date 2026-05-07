@@ -29,33 +29,34 @@ model Tenant {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users              User[]
-  roles              Role[]
-  objects            ObjectDef[]
-  fields             FieldDef[]
-  picklists          Picklist[]
-  workflowRules      WorkflowRule[]
-  validationRules    ValidationRule[]
-  approvalProcesses  ApprovalProcess[]
-  leads              Lead[]
-  accounts           Account[]
-  contacts           Contact[]
-  opportunities      Opportunity[]
-  products           Product[]
-  priceBooks         PriceBook[]
-  quotes             Quote[]
-  orders             Order[]
-  contracts          Contract[]
-  activities         Activity[]
-  notes              Note[]
-  attachments        Attachment[]
-  auditLogs          AuditLog[]
-  customRecords      CustomRecord[]
-  emailTemplates     EmailTemplate[]
-  priceRules         PriceRule[]
+  users               User[]
+  roles               Role[]
+  objects             ObjectDef[]
+  fields              FieldDef[]
+  picklists           Picklist[]
+  workflowRules       WorkflowRule[]
+  validationRules     ValidationRule[]
+  approvalProcesses   ApprovalProcess[]
+  leads               Lead[]
+  accounts            Account[]
+  contacts            Contact[]
+  opportunities       Opportunity[]
+  products            Product[]
+  priceBooks          PriceBook[]
+  quotes              Quote[]
+  orders              Order[]
+  contracts           Contract[]
+  activities          Activity[]
+  notes               Note[]
+  attachments         Attachment[]
+  auditLogs           AuditLog[]
+  customRecords       CustomRecord[]
+  emailTemplates      EmailTemplate[]
+  priceRules          PriceRule[]
   forecastTargets     ForecastTarget[]
   forecastConfig      ForecastConfig?
   forecastUpdateTasks ForecastUpdateTask[]
+  aiInsights          AIInsight[]
 
   @@map("tenants")
 }
@@ -65,39 +66,39 @@ model Tenant {
 // ════════════════════════════════════════════════════════════════════════════
 
 model User {
-  id              String    @id @default(cuid())
-  tenantId        String
-  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  email           String
-  passwordHash    String
-  displayName     String
-  avatarUrl       String?
-  phone           String?
-  title           String?   // job title
-  department      String?
-  managerId       String?
-  manager         User?     @relation("UserManager", fields: [managerId], references: [id])
-  subordinates    User[]    @relation("UserManager")
-  isActive        Boolean   @default(true)
-  lastLoginAt     DateTime?
-  locale          String    @default("zh-CN")
-  timezone        String    @default("Asia/Shanghai")
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  deletedAt       DateTime?
+  id           String    @id @default(cuid())
+  tenantId     String
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email        String
+  passwordHash String
+  displayName  String
+  avatarUrl    String?
+  phone        String?
+  title        String? // job title
+  department   String?
+  managerId    String?
+  manager      User?     @relation("UserManager", fields: [managerId], references: [id])
+  subordinates User[]    @relation("UserManager")
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  locale       String    @default("zh-CN")
+  timezone     String    @default("Asia/Shanghai")
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
 
-  roles            UserRole[]
-  sessions         Session[]
-  refreshTokens    RefreshToken[]
-  ownedLeads       Lead[]         @relation("LeadOwner")
-  ownedAccounts    Account[]      @relation("AccountOwner")
-  ownedContacts    Contact[]      @relation("ContactOwner")
-  ownedOpps        Opportunity[]  @relation("OpportunityOwner")
-  ownedQuotes      Quote[]        @relation("QuoteOwner")
-  ownedOrders      Order[]        @relation("OrderOwner")
-  ownedActivities  Activity[]     @relation("ActivityOwner")
-  approvalActions  ApprovalAction[]
-  ownedCustoms     CustomRecord[] @relation("CustomRecordOwner")
+  roles                 UserRole[]
+  sessions              Session[]
+  refreshTokens         RefreshToken[]
+  ownedLeads            Lead[]                @relation("LeadOwner")
+  ownedAccounts         Account[]             @relation("AccountOwner")
+  ownedContacts         Contact[]             @relation("ContactOwner")
+  ownedOpps             Opportunity[]         @relation("OpportunityOwner")
+  ownedQuotes           Quote[]               @relation("QuoteOwner")
+  ownedOrders           Order[]               @relation("OrderOwner")
+  ownedActivities       Activity[]            @relation("ActivityOwner")
+  approvalActions       ApprovalAction[]
+  ownedCustoms          CustomRecord[]        @relation("CustomRecordOwner")
   forecastTargets       ForecastTarget[]
   createdForecastTasks  ForecastUpdateTask[]  @relation("ForecastTaskCreator")
   forecastUpdateEntries ForecastUpdateEntry[] @relation("ForecastEntryUser")
@@ -112,7 +113,7 @@ model Role {
   tenantId    String
   tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   name        String
-  code        String   // e.g. "admin", "sales_manager", "sales_rep"
+  code        String // e.g. "admin", "sales_manager", "sales_rep"
   description String?
   isSystem    Boolean  @default(false)
   createdAt   DateTime @default(now())
@@ -127,9 +128,9 @@ model Role {
 }
 
 model Permission {
-  id          String @id @default(cuid())
+  id          String  @id @default(cuid())
   // scoped format: "<object>.<action>" e.g. "lead.read", "opportunity.write", "admin.*"
-  code        String @unique
+  code        String  @unique
   object      String // e.g. "lead", "admin", "workflow"
   action      String // e.g. "read", "write", "delete", "approve", "*"
   description String?
@@ -153,8 +154,8 @@ model RolePermission {
 model UserRole {
   userId String
   roleId String
-  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
   @@id([userId, roleId])
   @@map("user_roles")
@@ -175,13 +176,13 @@ model Session {
 }
 
 model RefreshToken {
-  id         String   @id @default(cuid())
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tokenHash  String   @unique
-  revokedAt  DateTime?
-  expiresAt  DateTime
-  createdAt  DateTime @default(now())
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  revokedAt DateTime?
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
 
   @@index([userId])
   @@map("refresh_tokens")
@@ -193,7 +194,7 @@ model RefreshToken {
 
 enum FieldType {
   STRING
-  TEXT        // long text
+  TEXT // long text
   NUMBER
   DECIMAL
   CURRENCY
@@ -205,25 +206,25 @@ enum FieldType {
   URL
   PICKLIST
   MULTI_PICKLIST
-  REFERENCE   // FK to another object
+  REFERENCE // FK to another object
   FORMULA
   JSON
 }
 
 model ObjectDef {
-  id           String   @id @default(cuid())
-  tenantId     String
-  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  apiName      String   // e.g. "Lead", "Account", "custom_widget__c"
-  label        String
-  labelPlural  String
-  isSystem     Boolean  @default(false) // standard objects cannot be deleted
-  isCustom     Boolean  @default(false)
-  iconName     String?
-  description  String?
-  layoutJson   Json?    // page layout configuration
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  apiName     String // e.g. "Lead", "Account", "custom_widget__c"
+  label       String
+  labelPlural String
+  isSystem    Boolean  @default(false) // standard objects cannot be deleted
+  isCustom    Boolean  @default(false)
+  iconName    String?
+  description String?
+  layoutJson  Json? // page layout configuration
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   fields FieldDef[]
 
@@ -238,7 +239,7 @@ model FieldDef {
   tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   objectId        String
   object          ObjectDef @relation(fields: [objectId], references: [id], onDelete: Cascade)
-  apiName         String    // e.g. "amount", "custom_score__c"
+  apiName         String // e.g. "amount", "custom_score__c"
   label           String
   type            FieldType
   required        Boolean   @default(false)
@@ -249,14 +250,14 @@ model FieldDef {
   helpText        String?
   picklistId      String?
   picklist        Picklist? @relation(fields: [picklistId], references: [id])
-  referenceTo     String?   // object apiName when type=REFERENCE
-  formulaExpr     String?   // expression when type=FORMULA
+  referenceTo     String? // object apiName when type=REFERENCE
+  formulaExpr     String? // expression when type=FORMULA
   validationRegex String?
   minValue        Decimal?  @db.Decimal(20, 6)
   maxValue        Decimal?  @db.Decimal(20, 6)
   precision       Int?
   scale           Int?
-  readPermission  String?   // permission code required to read
+  readPermission  String? // permission code required to read
   writePermission String?
   displayOrder    Int       @default(0)
   isActive        Boolean   @default(true)
@@ -272,7 +273,7 @@ model Picklist {
   id          String   @id @default(cuid())
   tenantId    String
   tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  apiName     String   // e.g. "lead_status", "industry"
+  apiName     String // e.g. "lead_status", "industry"
   label       String
   description String?
   createdAt   DateTime @default(now())
@@ -295,7 +296,7 @@ model PicklistValue {
   isDefault    Boolean  @default(false)
   isActive     Boolean  @default(true)
   displayOrder Int      @default(0)
-  color        String?  // UI hint
+  color        String? // UI hint
   metadata     Json     @default("{}")
 
   @@unique([picklistId, value])
@@ -307,53 +308,53 @@ model PicklistValue {
 // ════════════════════════════════════════════════════════════════════════════
 
 model Lead {
-  id              String    @id @default(cuid())
-  tenantId        String
-  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  ownerId         String
-  owner           User      @relation("LeadOwner", fields: [ownerId], references: [id])
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ownerId  String
+  owner    User   @relation("LeadOwner", fields: [ownerId], references: [id])
 
   // identity
-  firstName       String?
-  lastName        String
-  company         String
-  title           String?
-  email           String?
-  phone           String?
-  mobile          String?
-  website         String?
+  firstName String?
+  lastName  String
+  company   String
+  title     String?
+  email     String?
+  phone     String?
+  mobile    String?
+  website   String?
 
   // qualification
-  status          String    @default("new") // picklist: new/working/nurturing/qualified/unqualified
-  rating          String?   // hot/warm/cold
-  source          String?   // picklist
-  industry        String?
-  annualRevenue   Decimal?  @db.Decimal(18, 2)
-  employeeCount   Int?
-  score           Int?      // lead score 0-100
+  status        String   @default("new") // picklist: new/working/nurturing/qualified/unqualified
+  rating        String? // hot/warm/cold
+  source        String? // picklist
+  industry      String?
+  annualRevenue Decimal? @db.Decimal(18, 2)
+  employeeCount Int?
+  score         Int? // lead score 0-100
 
   // address
-  street          String?
-  city            String?
-  state           String?
-  postalCode      String?
-  country         String?
+  street     String?
+  city       String?
+  state      String?
+  postalCode String?
+  country    String?
 
-  description     String?   @db.Text
-  customFields    Json      @default("{}")
+  description  String? @db.Text
+  customFields Json    @default("{}")
 
   // conversion
-  isConverted     Boolean   @default(false)
-  convertedAt     DateTime?
-  convertedAccountId  String?
-  convertedContactId  String?
-  convertedOppId      String?
+  isConverted        Boolean   @default(false)
+  convertedAt        DateTime?
+  convertedAccountId String?
+  convertedContactId String?
+  convertedOppId     String?
 
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  createdById     String?
-  updatedById     String?
-  deletedAt       DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdById String?
+  updatedById String?
+  deletedAt   DateTime?
 
   @@index([tenantId, status])
   @@index([tenantId, ownerId])
@@ -363,49 +364,49 @@ model Lead {
 }
 
 model Account {
-  id             String   @id @default(cuid())
-  tenantId       String
-  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  ownerId        String
-  owner          User     @relation("AccountOwner", fields: [ownerId], references: [id])
-  parentId       String?
-  parent         Account? @relation("AccountParent", fields: [parentId], references: [id])
-  children       Account[] @relation("AccountParent")
+  id       String    @id @default(cuid())
+  tenantId String
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ownerId  String
+  owner    User      @relation("AccountOwner", fields: [ownerId], references: [id])
+  parentId String?
+  parent   Account?  @relation("AccountParent", fields: [parentId], references: [id])
+  children Account[] @relation("AccountParent")
 
-  name           String
-  type           String?  // picklist: customer/prospect/partner/competitor
-  industry       String?
-  website        String?
-  phone          String?
-  annualRevenue  Decimal? @db.Decimal(18, 2)
-  employeeCount  Int?
-  rating         String?
-  description    String?  @db.Text
+  name          String
+  type          String? // picklist: customer/prospect/partner/competitor
+  industry      String?
+  website       String?
+  phone         String?
+  annualRevenue Decimal? @db.Decimal(18, 2)
+  employeeCount Int?
+  rating        String?
+  description   String?  @db.Text
 
-  billingStreet     String?
-  billingCity       String?
-  billingState      String?
-  billingPostalCode String?
-  billingCountry    String?
-  shippingStreet    String?
-  shippingCity      String?
-  shippingState     String?
+  billingStreet      String?
+  billingCity        String?
+  billingState       String?
+  billingPostalCode  String?
+  billingCountry     String?
+  shippingStreet     String?
+  shippingCity       String?
+  shippingState      String?
   shippingPostalCode String?
-  shippingCountry   String?
+  shippingCountry    String?
 
-  customFields   Json     @default("{}")
+  customFields Json @default("{}")
 
-  contacts       Contact[]
-  opportunities  Opportunity[]
-  quotes         Quote[]
-  orders         Order[]
-  contracts      Contract[]
+  contacts      Contact[]
+  opportunities Opportunity[]
+  quotes        Quote[]
+  orders        Order[]
+  contracts     Contract[]
 
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  createdById    String?
-  updatedById    String?
-  deletedAt      DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdById String?
+  updatedById String?
+  deletedAt   DateTime?
 
   @@index([tenantId, ownerId])
   @@index([tenantId, name])
@@ -413,16 +414,16 @@ model Account {
 }
 
 model Contact {
-  id           String   @id @default(cuid())
-  tenantId     String
-  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  ownerId      String
-  owner        User     @relation("ContactOwner", fields: [ownerId], references: [id])
-  accountId    String?
-  account      Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
-  reportsToId  String?
-  reportsTo    Contact? @relation("ContactReports", fields: [reportsToId], references: [id])
-  reports      Contact[] @relation("ContactReports")
+  id          String    @id @default(cuid())
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ownerId     String
+  owner       User      @relation("ContactOwner", fields: [ownerId], references: [id])
+  accountId   String?
+  account     Account?  @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  reportsToId String?
+  reportsTo   Contact?  @relation("ContactReports", fields: [reportsToId], references: [id])
+  reports     Contact[] @relation("ContactReports")
 
   firstName    String?
   lastName     String
@@ -433,8 +434,8 @@ model Contact {
   mobile       String?
   fax          String?
   birthday     DateTime?
-  description  String?  @db.Text
-  customFields Json     @default("{}")
+  description  String?   @db.Text
+  customFields Json      @default("{}")
 
   mailingStreet     String?
   mailingCity       String?
@@ -442,11 +443,11 @@ model Contact {
   mailingPostalCode String?
   mailingCountry    String?
 
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  createdById  String?
-  updatedById  String?
-  deletedAt    DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdById String?
+  updatedById String?
+  deletedAt   DateTime?
 
   @@index([tenantId, accountId])
   @@index([tenantId, email])
@@ -454,41 +455,41 @@ model Contact {
 }
 
 model Opportunity {
-  id                String   @id @default(cuid())
-  tenantId          String
-  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  ownerId           String
-  owner             User     @relation("OpportunityOwner", fields: [ownerId], references: [id])
-  accountId         String
-  account           Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  primaryContactId  String?
+  id               String  @id @default(cuid())
+  tenantId         String
+  tenant           Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ownerId          String
+  owner            User    @relation("OpportunityOwner", fields: [ownerId], references: [id])
+  accountId        String
+  account          Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  primaryContactId String?
 
-  name              String
-  stage             String   @default("prospecting") // picklist
-  amount            Decimal? @db.Decimal(18, 2)
-  currencyCode      String   @default("CNY")
-  probability       Int      @default(10)          // 0-100
-  forecastCategory  String   @default("pipeline")  // pipeline/best_case/commit/closed
-  closeDate         DateTime
-  type              String?  // new_business/existing_business/renewal
-  leadSource        String?
-  nextStep          String?
-  description       String?  @db.Text
-  lossReason        String?
+  name             String
+  stage            String   @default("prospecting") // picklist
+  amount           Decimal? @db.Decimal(18, 2)
+  currencyCode     String   @default("CNY")
+  probability      Int      @default(10) // 0-100
+  forecastCategory String   @default("pipeline") // pipeline/best_case/commit/closed
+  closeDate        DateTime
+  type             String? // new_business/existing_business/renewal
+  leadSource       String?
+  nextStep         String?
+  description      String?  @db.Text
+  lossReason       String?
 
-  isClosed          Boolean  @default(false)
-  isWon             Boolean  @default(false)
-  customFields      Json     @default("{}")
+  isClosed     Boolean @default(false)
+  isWon        Boolean @default(false)
+  customFields Json    @default("{}")
 
-  lineItems         OpportunityLineItem[]
-  quotes            Quote[]
-  orders            Order[]
+  lineItems OpportunityLineItem[]
+  quotes    Quote[]
+  orders    Order[]
 
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  createdById       String?
-  updatedById       String?
-  deletedAt         DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdById String?
+  updatedById String?
+  deletedAt   DateTime?
 
   @@index([tenantId, stage])
   @@index([tenantId, ownerId])
@@ -503,7 +504,7 @@ model ForecastTarget {
   tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  period    String   // "2026-Q2"
+  period    String // "2026-Q2"
   quota     Decimal  @default(0) @db.Decimal(18, 2)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -537,10 +538,10 @@ model ForecastUpdateTask {
   tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   createdById   String
   createdBy     User     @relation("ForecastTaskCreator", fields: [createdById], references: [id])
-  period        String   // "2026-Q2"
+  period        String // "2026-Q2"
   title         String
   dueDate       DateTime
-  targetUserIds Json     @default("[]")  // string[]
+  targetUserIds Json     @default("[]") // string[]
   dateRangeFrom DateTime
   dateRangeTo   DateTime
   status        String   @default("open") // open | closed
@@ -575,26 +576,26 @@ model ForecastUpdateEntry {
 }
 
 model Product {
-  id           String    @id @default(cuid())
+  id           String  @id @default(cuid())
   tenantId     String
-  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  code         String    // SKU
+  tenant       Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  code         String // SKU
   name         String
   family       String?
-  description  String?   @db.Text
-  isActive     Boolean   @default(true)
-  unit         String    @default("unit")
-  taxable      Boolean   @default(true)
-  customFields Json      @default("{}")
+  description  String? @db.Text
+  isActive     Boolean @default(true)
+  unit         String  @default("unit")
+  taxable      Boolean @default(true)
+  customFields Json    @default("{}")
 
-  priceEntries    PriceBookEntry[]
-  oppLineItems    OpportunityLineItem[]
-  quoteLineItems  QuoteLineItem[]
-  orderLineItems  OrderLineItem[]
+  priceEntries   PriceBookEntry[]
+  oppLineItems   OpportunityLineItem[]
+  quoteLineItems QuoteLineItem[]
+  orderLineItems OrderLineItem[]
 
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  deletedAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -602,17 +603,17 @@ model Product {
 }
 
 model PriceBook {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   name        String
   description String?
-  isStandard  Boolean  @default(false) // exactly one per tenant
-  isActive    Boolean  @default(true)
+  isStandard  Boolean   @default(false) // exactly one per tenant
+  isActive    Boolean   @default(true)
   validFrom   DateTime?
   validTo     DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   entries PriceBookEntry[]
 
@@ -653,51 +654,51 @@ model OpportunityLineItem {
 }
 
 model Quote {
-  id               String    @id @default(cuid())
-  tenantId         String
-  tenant           Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  ownerId          String
-  owner            User      @relation("QuoteOwner", fields: [ownerId], references: [id])
-  opportunityId    String?
-  opportunity      Opportunity? @relation(fields: [opportunityId], references: [id])
-  accountId        String?
-  account          Account?  @relation(fields: [accountId], references: [id])
+  id            String       @id @default(cuid())
+  tenantId      String
+  tenant        Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ownerId       String
+  owner         User         @relation("QuoteOwner", fields: [ownerId], references: [id])
+  opportunityId String?
+  opportunity   Opportunity? @relation(fields: [opportunityId], references: [id])
+  accountId     String?
+  account       Account?     @relation(fields: [accountId], references: [id])
 
-  quoteNumber      String    // e.g. Q-2026-00001
-  name             String
-  status           String    @default("draft") // draft/in_review/approved/presented/accepted/rejected/expired
-  currencyCode     String    @default("CNY")
-  expiresAt        DateTime?
+  quoteNumber  String // e.g. Q-2026-00001
+  name         String
+  status       String    @default("draft") // draft/in_review/approved/presented/accepted/rejected/expired
+  currencyCode String    @default("CNY")
+  expiresAt    DateTime?
 
-  subtotal         Decimal   @default(0) @db.Decimal(18, 2)
-  discountAmount   Decimal   @default(0) @db.Decimal(18, 2)
-  taxAmount        Decimal   @default(0) @db.Decimal(18, 2)
-  shippingAmount   Decimal   @default(0) @db.Decimal(18, 2)
-  grandTotal       Decimal   @default(0) @db.Decimal(18, 2)
+  subtotal       Decimal @default(0) @db.Decimal(18, 2)
+  discountAmount Decimal @default(0) @db.Decimal(18, 2)
+  taxAmount      Decimal @default(0) @db.Decimal(18, 2)
+  shippingAmount Decimal @default(0) @db.Decimal(18, 2)
+  grandTotal     Decimal @default(0) @db.Decimal(18, 2)
 
-  billingStreet    String?
-  billingCity      String?
-  billingState     String?
-  billingPostalCode String?
-  billingCountry   String?
-  shippingStreet   String?
-  shippingCity     String?
-  shippingState    String?
+  billingStreet      String?
+  billingCity        String?
+  billingState       String?
+  billingPostalCode  String?
+  billingCountry     String?
+  shippingStreet     String?
+  shippingCity       String?
+  shippingState      String?
   shippingPostalCode String?
-  shippingCountry  String?
+  shippingCountry    String?
 
-  notes            String?  @db.Text
+  notes              String? @db.Text
   termsAndConditions String? @db.Text
-  customFields     Json     @default("{}")
+  customFields       Json    @default("{}")
 
-  lineItems        QuoteLineItem[]
-  orders           Order[]
+  lineItems QuoteLineItem[]
+  orders    Order[]
 
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  createdById      String?
-  updatedById      String?
-  deletedAt        DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdById String?
+  updatedById String?
+  deletedAt   DateTime?
 
   @@unique([tenantId, quoteNumber])
   @@index([tenantId, status])
@@ -724,55 +725,55 @@ model QuoteLineItem {
 }
 
 model Order {
-  id               String    @id @default(cuid())
-  tenantId         String
-  tenant           Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  ownerId          String
-  owner            User      @relation("OrderOwner", fields: [ownerId], references: [id])
-  accountId        String
-  account          Account   @relation(fields: [accountId], references: [id])
-  opportunityId    String?
-  opportunity      Opportunity? @relation(fields: [opportunityId], references: [id])
-  quoteId          String?
-  quote            Quote?    @relation(fields: [quoteId], references: [id])
-  contractId       String?
-  contract         Contract? @relation(fields: [contractId], references: [id])
+  id            String       @id @default(cuid())
+  tenantId      String
+  tenant        Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ownerId       String
+  owner         User         @relation("OrderOwner", fields: [ownerId], references: [id])
+  accountId     String
+  account       Account      @relation(fields: [accountId], references: [id])
+  opportunityId String?
+  opportunity   Opportunity? @relation(fields: [opportunityId], references: [id])
+  quoteId       String?
+  quote         Quote?       @relation(fields: [quoteId], references: [id])
+  contractId    String?
+  contract      Contract?    @relation(fields: [contractId], references: [id])
 
-  orderNumber      String
-  status           String    @default("draft") // draft/activated/shipped/delivered/cancelled
-  type             String?   // new/renewal/upgrade
-  effectiveDate    DateTime
-  endDate          DateTime?
-  poNumber         String?   // customer PO
-  currencyCode     String    @default("CNY")
+  orderNumber   String
+  status        String    @default("draft") // draft/activated/shipped/delivered/cancelled
+  type          String? // new/renewal/upgrade
+  effectiveDate DateTime
+  endDate       DateTime?
+  poNumber      String? // customer PO
+  currencyCode  String    @default("CNY")
 
-  subtotal         Decimal   @default(0) @db.Decimal(18, 2)
-  discountAmount   Decimal   @default(0) @db.Decimal(18, 2)
-  taxAmount        Decimal   @default(0) @db.Decimal(18, 2)
-  shippingAmount   Decimal   @default(0) @db.Decimal(18, 2)
-  grandTotal       Decimal   @default(0) @db.Decimal(18, 2)
+  subtotal       Decimal @default(0) @db.Decimal(18, 2)
+  discountAmount Decimal @default(0) @db.Decimal(18, 2)
+  taxAmount      Decimal @default(0) @db.Decimal(18, 2)
+  shippingAmount Decimal @default(0) @db.Decimal(18, 2)
+  grandTotal     Decimal @default(0) @db.Decimal(18, 2)
 
-  billingStreet    String?
-  billingCity      String?
-  billingState     String?
-  billingPostalCode String?
-  billingCountry   String?
-  shippingStreet   String?
-  shippingCity     String?
-  shippingState    String?
+  billingStreet      String?
+  billingCity        String?
+  billingState       String?
+  billingPostalCode  String?
+  billingCountry     String?
+  shippingStreet     String?
+  shippingCity       String?
+  shippingState      String?
   shippingPostalCode String?
-  shippingCountry  String?
+  shippingCountry    String?
 
-  notes            String?   @db.Text
-  customFields     Json      @default("{}")
+  notes        String? @db.Text
+  customFields Json    @default("{}")
 
-  lineItems        OrderLineItem[]
+  lineItems OrderLineItem[]
 
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-  createdById      String?
-  updatedById      String?
-  deletedAt        DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdById String?
+  updatedById String?
+  deletedAt   DateTime?
 
   @@unique([tenantId, orderNumber])
   @@index([tenantId, status])
@@ -799,33 +800,33 @@ model OrderLineItem {
 }
 
 model Contract {
-  id               String   @id @default(cuid())
+  id               String    @id @default(cuid())
   tenantId         String
-  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant           Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   accountId        String
-  account          Account  @relation(fields: [accountId], references: [id])
+  account          Account   @relation(fields: [accountId], references: [id])
   contractNumber   String
   name             String
-  status           String   @default("draft") // draft/in_approval/activated/expired/terminated
+  status           String    @default("draft") // draft/in_approval/activated/expired/terminated
   startDate        DateTime
   endDate          DateTime
-  term             Int?     // months
-  contractValue    Decimal? @db.Decimal(18, 2)
-  currencyCode     String   @default("CNY")
-  billingFrequency String?  // monthly/quarterly/annual/one_time
-  paymentTerms     String?  // net_30 etc
-  description      String?  @db.Text
+  term             Int? // months
+  contractValue    Decimal?  @db.Decimal(18, 2)
+  currencyCode     String    @default("CNY")
+  billingFrequency String? // monthly/quarterly/annual/one_time
+  paymentTerms     String? // net_30 etc
+  description      String?   @db.Text
   signedAt         DateTime?
   signedBy         String?
-  customFields     Json     @default("{}")
+  customFields     Json      @default("{}")
 
-  orders           Order[]
+  orders Order[]
 
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  createdById      String?
-  updatedById      String?
-  deletedAt        DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdById String?
+  updatedById String?
+  deletedAt   DateTime?
 
   @@unique([tenantId, contractNumber])
   @@index([tenantId, status])
@@ -854,34 +855,34 @@ enum ActivityStatus {
 }
 
 model Activity {
-  id           String         @id @default(cuid())
-  tenantId     String
-  tenant       Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  ownerId      String
-  owner        User           @relation("ActivityOwner", fields: [ownerId], references: [id])
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ownerId  String
+  owner    User   @relation("ActivityOwner", fields: [ownerId], references: [id])
 
-  type         ActivityType
-  subject      String
-  status       ActivityStatus @default(OPEN)
-  priority     String         @default("normal") // low/normal/high
-  dueDate      DateTime?
-  startAt      DateTime?
-  endAt        DateTime?
-  location     String?
-  description  String?        @db.Text
+  type        ActivityType
+  subject     String
+  status      ActivityStatus @default(OPEN)
+  priority    String         @default("normal") // low/normal/high
+  dueDate     DateTime?
+  startAt     DateTime?
+  endAt       DateTime?
+  location    String?
+  description String?        @db.Text
 
   // polymorphic target
-  targetType   String?        // "lead" | "account" | "contact" | "opportunity" | ...
-  targetId     String?
+  targetType String? // "lead" | "account" | "contact" | "opportunity" | ...
+  targetId   String?
 
   completedAt  DateTime?
-  customFields Json           @default("{}")
+  customFields Json      @default("{}")
 
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-  createdById  String?
-  updatedById  String?
-  deletedAt    DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdById String?
+  updatedById String?
+  deletedAt   DateTime?
 
   @@index([tenantId, ownerId, status])
   @@index([tenantId, targetType, targetId])
@@ -906,17 +907,17 @@ model Note {
 }
 
 model Attachment {
-  id           String   @id @default(cuid())
-  tenantId     String
-  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  uploaderId   String
-  filename     String
-  contentType  String
-  size         Int
-  url          String
-  targetType   String
-  targetId     String
-  createdAt    DateTime @default(now())
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  uploaderId  String
+  filename    String
+  contentType String
+  size        Int
+  url         String
+  targetType  String
+  targetId    String
+  createdAt   DateTime @default(now())
 
   @@index([tenantId, targetType, targetId])
   @@map("attachments")
@@ -927,16 +928,16 @@ model Attachment {
 // ════════════════════════════════════════════════════════════════════════════
 
 model EmailTemplate {
-  id          String   @id @default(cuid())
-  tenantId    String
-  name        String
-  subject     String
-  body        String   @db.Text
-  category    String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  subject   String
+  body      String   @db.Text
+  category  String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
   @@map("email_templates")
@@ -947,17 +948,17 @@ model EmailTemplate {
 // ════════════════════════════════════════════════════════════════════════════
 
 model PriceRule {
-  id                  String   @id @default(cuid())
-  tenantId            String
-  name                String
-  description         String?
-  objectType          String   @default("Quote")  // Quote or Opportunity
-  discountThreshold   Decimal  @db.Decimal(5, 2)  // percent, e.g. 10.00 means >10% triggers
-  approvalProcessId   String?  // linked approval process
-  isActive            Boolean  @default(true)
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-  tenant              Tenant   @relation(fields: [tenantId], references: [id])
+  id                String   @id @default(cuid())
+  tenantId          String
+  name              String
+  description       String?
+  objectType        String   @default("Quote") // Quote or Opportunity
+  discountThreshold Decimal  @db.Decimal(5, 2) // percent, e.g. 10.00 means >10% triggers
+  approvalProcessId String? // linked approval process
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  tenant            Tenant   @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
   @@map("price_rules")
@@ -984,54 +985,54 @@ enum WorkflowStatus {
 }
 
 model WorkflowRule {
-  id              String          @id @default(cuid())
-  tenantId        String
-  tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  name            String
-  description     String?
-  objectApiName   String          // e.g. "lead", "opportunity"
-  trigger         WorkflowTrigger
+  id            String          @id @default(cuid())
+  tenantId      String
+  tenant        Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name          String
+  description   String?
+  objectApiName String // e.g. "lead", "opportunity"
+  trigger       WorkflowTrigger
   // for ON_FIELD_CHANGE: array of field api names
-  watchFields     String[]        @default([])
+  watchFields   String[]        @default([])
   // JSON rule tree (see rule-engine package): { all: [...] } or { any: [...] }
-  conditions      Json            @default("{}")
+  conditions    Json            @default("{}")
   // Array of action descriptors: { type, params }
-  actions         Json            @default("[]")
+  actions       Json            @default("[]")
   // for SCHEDULED: cron expression
-  cronExpr        String?
+  cronExpr      String?
   // run sync (in transaction) vs async (queued)
-  runSync         Boolean         @default(false)
-  priority        Int             @default(100) // lower runs first
-  isActive        Boolean         @default(true)
+  runSync       Boolean         @default(false)
+  priority      Int             @default(100) // lower runs first
+  isActive      Boolean         @default(true)
   // re-entrancy guard
-  runOnceFlag     Boolean         @default(false)
+  runOnceFlag   Boolean         @default(false)
 
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  createdById     String?
-  updatedById     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String?
+  updatedById String?
 
-  executions      WorkflowExecution[]
+  executions WorkflowExecution[]
 
   @@index([tenantId, objectApiName, isActive])
   @@map("workflow_rules")
 }
 
 model WorkflowExecution {
-  id          String         @id @default(cuid())
-  ruleId      String
-  rule        WorkflowRule   @relation(fields: [ruleId], references: [id], onDelete: Cascade)
-  tenantId    String
-  recordType  String
-  recordId    String
-  trigger     WorkflowTrigger
-  status      WorkflowStatus
-  conditionsResult Boolean   @default(false)
-  actionsLog  Json           @default("[]")
-  error       String?        @db.Text
-  durationMs  Int?
-  startedAt   DateTime       @default(now())
-  finishedAt  DateTime?
+  id               String          @id @default(cuid())
+  ruleId           String
+  rule             WorkflowRule    @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  tenantId         String
+  recordType       String
+  recordId         String
+  trigger          WorkflowTrigger
+  status           WorkflowStatus
+  conditionsResult Boolean         @default(false)
+  actionsLog       Json            @default("[]")
+  error            String?         @db.Text
+  durationMs       Int?
+  startedAt        DateTime        @default(now())
+  finishedAt       DateTime?
 
   @@index([tenantId, recordType, recordId])
   @@index([ruleId, startedAt])
@@ -1039,21 +1040,21 @@ model WorkflowExecution {
 }
 
 model ValidationRule {
-  id            String   @id @default(cuid())
+  id            String  @id @default(cuid())
   tenantId      String
-  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant        Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   name          String
   description   String?
   objectApiName String
   // Rule that when evaluates TRUE, the save is BLOCKED (Salesforce semantics).
-  conditions    Json     @default("{}")
+  conditions    Json    @default("{}")
   errorMessage  String
-  errorField    String?  // optional field to attach the error to
-  isActive      Boolean  @default(true)
-  priority      Int      @default(100)
+  errorField    String? // optional field to attach the error to
+  isActive      Boolean @default(true)
+  priority      Int     @default(100)
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tenantId, objectApiName, isActive])
   @@map("validation_rules")
@@ -1064,17 +1065,17 @@ model ValidationRule {
 // ════════════════════════════════════════════════════════════════════════════
 
 enum ApproverSource {
-  USER            // fixed user id
-  ROLE            // any user with role code
-  MANAGER         // submitter's manager chain
-  FIELD           // user id from a field on the record (e.g. account.ownerId.manager)
-  DYNAMIC         // resolved via rule/formula
+  USER // fixed user id
+  ROLE // any user with role code
+  MANAGER // submitter's manager chain
+  FIELD // user id from a field on the record (e.g. account.ownerId.manager)
+  DYNAMIC // resolved via rule/formula
 }
 
 enum ApprovalStepMode {
-  SEQUENTIAL      // one approver at a time; all must approve
-  PARALLEL_ALL    // everyone in parallel; all must approve
-  PARALLEL_ANY    // anyone can approve to advance
+  SEQUENTIAL // one approver at a time; all must approve
+  PARALLEL_ALL // everyone in parallel; all must approve
+  PARALLEL_ANY // anyone can approve to advance
 }
 
 enum ApprovalRequestStatus {
@@ -1094,25 +1095,25 @@ enum ApprovalActionType {
 }
 
 model ApprovalProcess {
-  id              String   @id @default(cuid())
-  tenantId        String
-  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  name            String
-  description     String?
-  objectApiName   String
+  id                  String  @id @default(cuid())
+  tenantId            String
+  tenant              Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name                String
+  description         String?
+  objectApiName       String
   // Records matching entry criteria can be submitted for approval.
-  entryCriteria   Json     @default("{}")
+  entryCriteria       Json    @default("{}")
   // When approved, what to do (field updates etc). Same action schema as workflow.
-  finalApproveActions Json @default("[]")
-  finalRejectActions  Json @default("[]")
+  finalApproveActions Json    @default("[]")
+  finalRejectActions  Json    @default("[]")
   // On submit: lock the record? (blocks edits)
-  lockOnSubmit    Boolean  @default(true)
-  isActive        Boolean  @default(true)
-  priority        Int      @default(100)
-  version         Int      @default(1)
+  lockOnSubmit        Boolean @default(true)
+  isActive            Boolean @default(true)
+  priority            Int     @default(100)
+  version             Int     @default(1)
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   steps    ApprovalStep[]
   requests ApprovalRequest[]
@@ -1130,7 +1131,7 @@ model ApprovalStep {
   // condition to enter this step; null = always
   entryCondition Json?
   approverSource ApproverSource
-  approverConfig Json             // depends on source: { userId } | { roleCode } | { levels } | { fieldPath }
+  approverConfig Json // depends on source: { userId } | { roleCode } | { levels } | { fieldPath }
   mode           ApprovalStepMode @default(SEQUENTIAL)
   // if rejected at this step: restart, or final rejection
   rejectBehavior String           @default("final_reject") // final_reject | restart | prev_step
@@ -1140,21 +1141,21 @@ model ApprovalStep {
 }
 
 model ApprovalRequest {
-  id               String                @id @default(cuid())
-  tenantId         String
-  processId        String
-  process          ApprovalProcess       @relation(fields: [processId], references: [id])
-  recordType       String
-  recordId         String
-  submitterId      String
-  status           ApprovalRequestStatus @default(PENDING)
-  currentStepId    String?
-  currentStepOrder Int?
+  id                 String                @id @default(cuid())
+  tenantId           String
+  processId          String
+  process            ApprovalProcess       @relation(fields: [processId], references: [id])
+  recordType         String
+  recordId           String
+  submitterId        String
+  status             ApprovalRequestStatus @default(PENDING)
+  currentStepId      String?
+  currentStepOrder   Int?
   // user ids awaiting action at current step (supports PARALLEL_ALL/ANY)
-  currentAssigneeIds String[]           @default([])
-  submittedAt      DateTime              @default(now())
-  finalizedAt      DateTime?
-  comments         String?               @db.Text
+  currentAssigneeIds String[]              @default([])
+  submittedAt        DateTime              @default(now())
+  finalizedAt        DateTime?
+  comments           String?               @db.Text
 
   actions ApprovalAction[]
 
@@ -1164,16 +1165,16 @@ model ApprovalRequest {
 }
 
 model ApprovalAction {
-  id          String             @id @default(cuid())
-  requestId   String
-  request     ApprovalRequest    @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  stepOrder   Int?
-  actorId     String
-  actor       User               @relation(fields: [actorId], references: [id])
-  action      ApprovalActionType
-  comment     String?
-  metadata    Json               @default("{}")
-  createdAt   DateTime           @default(now())
+  id        String             @id @default(cuid())
+  requestId String
+  request   ApprovalRequest    @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  stepOrder Int?
+  actorId   String
+  actor     User               @relation(fields: [actorId], references: [id])
+  action    ApprovalActionType
+  comment   String?
+  metadata  Json               @default("{}")
+  createdAt DateTime           @default(now())
 
   @@index([requestId, createdAt])
   @@map("approval_actions")
@@ -1188,10 +1189,10 @@ model AuditLog {
   tenantId   String
   tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   actorId    String?
-  action     String   // "create" | "update" | "delete" | "convert" | ...
+  action     String // "create" | "update" | "delete" | "convert" | ...
   recordType String
   recordId   String
-  changes    Json     @default("{}")   // { field: { from, to } }
+  changes    Json     @default("{}") // { field: { from, to } }
   ip         String?
   userAgent  String?
   createdAt  DateTime @default(now())
@@ -1204,7 +1205,7 @@ model AuditLog {
 model OutboxEvent {
   id          String    @id @default(cuid())
   tenantId    String
-  eventType   String    // "lead.created" | "opportunity.stage_changed" | ...
+  eventType   String // "lead.created" | "opportunity.stage_changed" | ...
   recordType  String
   recordId    String
   payload     Json
@@ -1229,21 +1230,72 @@ model SequenceCounter {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// AI INSIGHTS
+// ────────────────────────────────────────────────────────────────────────────
+// Cached LLM-generated insights for any record (opportunity / lead / account /
+// account / activity-timeline). Keyed by (tenantId, targetType, targetId, kind)
+// so each "kind" of insight (win-prob, score, summary, ...) is a single row
+// per record, refreshed on demand or by background workers.
+// ════════════════════════════════════════════════════════════════════════════
+
+enum AIInsightKind {
+  OPP_WIN_PROBABILITY // {score, riskFactors[], strengths[], nextActions[], summary}
+  OPP_NEXT_BEST_ACTION // {actions[]}
+  OPP_ACTIVITY_SUMMARY // {summary, sentiment, suggestions[]}
+  LEAD_SCORE // {score, fitScore, intentScore, reasoning, qualifiers[], blockers[]}
+  LEAD_DRAFT_OUTREACH // {channel, subject, body}
+  ACCOUNT_BRIEFING // {summary, latestSignals[], openOpps[], risks[]}
+}
+
+model AIInsight {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  targetType String // "opportunity" | "lead" | "account" | ...
+  targetId   String
+  kind       AIInsightKind
+
+  payload Json // structured result; shape depends on kind
+  summary String? @db.Text // short human-readable summary, indexable
+
+  modelName        String // e.g. "claude-sonnet-4-5-20250929"
+  promptTokens     Int    @default(0)
+  outputTokens     Int    @default(0)
+  cacheReadTokens  Int    @default(0)
+  cacheWriteTokens Int    @default(0)
+  latencyMs        Int    @default(0)
+
+  inputHash     String // hash of inputs used; lets us skip regen when unchanged
+  generatedAt   DateTime  @default(now())
+  expiresAt     DateTime?
+  generatedById String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, targetType, targetId, kind])
+  @@index([tenantId, targetType, targetId])
+  @@index([tenantId, kind, generatedAt])
+  @@map("ai_insights")
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // HEADLESS CUSTOM OBJECT RECORDS
 // ════════════════════════════════════════════════════════════════════════════
 
 model CustomRecord {
-  id            String   @id @default(cuid())
+  id            String  @id @default(cuid())
   tenantId      String
-  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  objectApiName String   // apiName of the ObjectDef
-  data          Json     @default("{}")
+  tenant        Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  objectApiName String // apiName of the ObjectDef
+  data          Json    @default("{}")
   ownerId       String?
-  owner         User?    @relation("CustomRecordOwner", fields: [ownerId], references: [id])
-  
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  
+  owner         User?   @relation("CustomRecordOwner", fields: [ownerId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([tenantId, objectApiName])
   @@index([tenantId, ownerId])
   @@map("custom_records")

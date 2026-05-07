@@ -6,10 +6,11 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { accountsApi, contactsApi } from '@/lib/api';
 import { ActivityTimeline } from '@/components/crm/activity-timeline';
+import { AccountBriefingCard } from '@/components/ai/account-briefing-card';
 import { fmtDate, fmtMoney, cn } from '@/lib/utils';
 import {
   ArrowLeft, Building2, Phone, Globe, MapPin,
-  Flag, Calendar, Users, Pencil, Trash2, Mail, Activity,
+  Flag, Calendar, Users, Pencil, Trash2, Mail, Activity, Sparkles,
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -369,6 +370,12 @@ export default function AccountDetailPage() {
           >
             <Activity size={14} /> 活动记录
           </TabsTrigger>
+          <TabsTrigger
+            value="ai"
+            className="rounded-xl text-sm font-bold px-5 data-[state=active]:bg-white data-[state=active]:shadow-sm gap-2 data-[state=active]:text-violet-600"
+          >
+            <Sparkles size={14} /> AI Briefing
+          </TabsTrigger>
         </TabsList>
 
         {/* Tab 1: Basic Info */}
@@ -512,6 +519,11 @@ export default function AccountDetailPage() {
               <ActivityTimeline relatedToType="account" relatedToId={id} />
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Tab 4: AI Briefing */}
+        <TabsContent value="ai" className="mt-0">
+          <AccountBriefingCard accountId={id} />
         </TabsContent>
       </Tabs>
 

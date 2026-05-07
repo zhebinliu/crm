@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/layout/sidebar';
 import { useSidebar, SidebarProvider } from '@/components/layout/sidebar-context';
 import { useAuthStore } from '@/stores/auth';
+import { CopilotTrigger } from '@/components/ai/copilot-trigger';
 
 function CrmLayoutContent({ children }: { children: React.ReactNode }) {
   const { user } = useAuthStore();
@@ -25,6 +26,7 @@ function CrmLayoutContent({ children }: { children: React.ReactNode }) {
       >
         {children}
       </main>
+      <CopilotTrigger />
     </div>
   );
 }

@@ -2,7 +2,7 @@
 // Format: "<object>.<action>"
 // "*" means all actions on object; "admin.*" is super-admin.
 
-export const ACTIONS = ['read', 'write', 'delete', 'convert', 'approve', '*'] as const;
+export const ACTIONS = ['read', 'write', 'delete', 'convert', 'approve', 'invoke', '*'] as const;
 export type PermissionAction = (typeof ACTIONS)[number];
 
 export const OBJECTS = [
@@ -25,6 +25,7 @@ export const OBJECTS = [
   'metadata',
   'user',
   'role',
+  'ai',
 ] as const;
 export type PermissionObject = (typeof OBJECTS)[number];
 
@@ -56,6 +57,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, PermissionCode[]> = {
     'report.read',
     'approval.approve',
     'user.read',
+    'ai.invoke',
+    'ai.read',
   ],
   sales_rep: [
     'lead.read',
@@ -73,6 +76,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, PermissionCode[]> = {
     'product.read',
     'pricebook.read',
     'activity.*',
+    'ai.invoke',
+    'ai.read',
   ],
   approver: ['approval.approve', 'opportunity.read', 'quote.read', 'order.read', 'contract.read'],
   read_only: [
@@ -85,6 +90,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, PermissionCode[]> = {
     'contract.read',
     'product.read',
     'activity.read',
+    'ai.read',
   ],
 };
 

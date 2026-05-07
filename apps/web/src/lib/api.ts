@@ -196,6 +196,34 @@ export const emailTemplatesApi = {
   remove: (id: string) => api.delete(`/admin/email-templates/${id}`).then((r) => r.data),
 };
 
+export const aiApi = {
+  oppWinProbability: (oppId: string) =>
+    api.get(`/ai/opportunities/${oppId}/win-probability`).then((r) => r.data),
+  refreshOppWinProbability: (oppId: string) =>
+    api.post(`/ai/opportunities/${oppId}/win-probability/refresh`).then((r) => r.data),
+  oppActivitySummary: (oppId: string) =>
+    api.get(`/ai/opportunities/${oppId}/activity-summary`).then((r) => r.data),
+  refreshOppActivitySummary: (oppId: string) =>
+    api.post(`/ai/opportunities/${oppId}/activity-summary/refresh`).then((r) => r.data),
+  leadScore: (leadId: string) =>
+    api.get(`/ai/leads/${leadId}/score`).then((r) => r.data),
+  refreshLeadScore: (leadId: string) =>
+    api.post(`/ai/leads/${leadId}/score/refresh`).then((r) => r.data),
+  accountBriefing: (accountId: string) =>
+    api.get(`/ai/accounts/${accountId}/briefing`).then((r) => r.data),
+  refreshAccountBriefing: (accountId: string) =>
+    api.post(`/ai/accounts/${accountId}/briefing/refresh`).then((r) => r.data),
+  draftLeadOutreach: (
+    leadId: string,
+    args: { channel: 'email' | 'wechat' | 'phone'; tone?: 'professional' | 'friendly' | 'concise' },
+  ) =>
+    api.post(`/ai/leads/${leadId}/draft-outreach`, args).then((r) => r.data),
+  pipelineRisk: (params?: { ownerId?: string; stage?: string; limit?: number }) =>
+    api.get('/ai/pipeline-risk', { params }).then((r) => r.data),
+  chat: (body: { message: string; history?: Array<{ role: 'user' | 'assistant'; text: string }> }) =>
+    api.post('/ai/chat', body, { timeout: 120_000 }).then((r) => r.data),
+};
+
 export const genericApi = {
   list: (objName: string, p?: Record<string, unknown>) => api.get(`/records/${objName}`, { params: p }).then(r => r.data),
   get: (objName: string, id: string) => api.get(`/records/${objName}/${id}`).then(r => r.data),

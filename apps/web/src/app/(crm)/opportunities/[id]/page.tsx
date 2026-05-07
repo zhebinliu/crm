@@ -6,6 +6,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { oppsApi, quotesApi, productsApi } from '@/lib/api';
 import { ActivityTimeline } from '@/components/crm/activity-timeline';
+import { OppWinProbabilityCard } from '@/components/ai/opp-win-probability-card';
+import { OppActivitySummaryCard } from '@/components/ai/opp-activity-summary-card';
 import { fmtDate, fmtMoney, stageColor, cn } from '@/lib/utils';
 import {
   Card, CardContent, CardHeader, CardTitle,
@@ -26,7 +28,7 @@ import {
   ArrowLeft, Pencil, FileText, Trash2, Plus,
   Building2, CalendarDays, TrendingUp, Target,
   CheckCircle2, XCircle, Package, Activity, ChevronRight,
-  Loader2,
+  Loader2, Sparkles,
 } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -861,6 +863,12 @@ export default function OpportunityDetailPage() {
           >
             <Activity size={14} /> 相关活动
           </TabsTrigger>
+          <TabsTrigger
+            value="ai"
+            className="rounded-xl text-sm font-bold px-5 data-[state=active]:bg-white data-[state=active]:shadow-sm gap-2 data-[state=active]:text-violet-600"
+          >
+            <Sparkles size={14} /> AI 洞察
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-0">
@@ -879,6 +887,13 @@ export default function OpportunityDetailPage() {
 
         <TabsContent value="activities" className="mt-0">
           <ActivitiesTab opportunityId={id} />
+        </TabsContent>
+
+        <TabsContent value="ai" className="mt-0">
+          <div className="space-y-6">
+            <OppWinProbabilityCard opportunityId={id} />
+            <OppActivitySummaryCard opportunityId={id} />
+          </div>
         </TabsContent>
       </Tabs>
 
