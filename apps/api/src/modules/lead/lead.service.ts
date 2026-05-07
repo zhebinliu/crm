@@ -6,8 +6,12 @@ import { WorkflowService } from '../workflow/workflow.service';
 import { ValidationRuleService } from '../workflow/validation-rule.service';
 import { AuditService } from '../workflow/audit.service';
 import { OutboxService } from '../../common/outbox.service';
+import { IdentityResolutionService } from '../person/identity-resolution.service';
+import { EmbeddingService, leadContent } from '../embeddings/embedding.service';
 import { EVENTS } from '@tokenwave/shared';
+import { FlsService } from '../fls/fls.service';
 import type { RequestUser } from '../../common/types/request-context';
+import { RecycleBinService } from '../recycle-bin/recycle-bin.service';
 
 export interface LeadListOptions {
   search?: string;
@@ -35,11 +39,34 @@ export class LeadService extends BaseEntityService {
     audit: AuditService,
     emitter: EventEmitter2,
     outbox: OutboxService,
+    recycleBin: RecycleBinService,
+    private readonly identity: IdentityResolutionService,
+    private readonly fls: FlsService,
+    embeddings: EmbeddingService,
   ) {
-    super(workflow, validation, audit, emitter, outbox);
+    super(workflow, validation, audit, emitter, outbox, recycleBin);
+    this.embeddings = embeddings;
   }
 
-  async list(tenantId: string, opts: LeadListOptions = {}) {
+  /** Project a Lead into the text we embed for RAG. */
+  protected buildEmbeddingContent(
+    objectApiName: string,
+    record: Record<string, unknown>,
+  ): string | null {
+    if (objectApiName !== 'lead') return null;
+    return leadContent({
+      firstName: record['firstName'] as string | null,
+      lastName: record['lastName'] as string | null,
+      company: record['company'] as string | null,
+      title: record['title'] as string | null,
+      email: record['email'] as string | null,
+      industry: record['industry'] as string | null,
+      description: record['description'] as string | null,
+      status: record['status'] as string | null,
+    });
+  }
+
+  async list(tenantId: string, opts: LeadListOptions = {}, user?: RequestUser) {
     const { search, status, ownerId, isConverted, skip = 0, take = 20 } = opts;
 
     const where = {
@@ -65,16 +92,22 @@ export class LeadService extends BaseEntityService {
       this.prisma.lead.count({ where }),
     ]);
 
+    // Wave 16a: strip FLS-gated fields from each row.
+    await this.fls.filterReadableMany(user, 'lead', data as unknown as Record<string, unknown>[]);
     return { data, total };
   }
 
-  async get(tenantId: string, id: string) {
+  async get(tenantId: string, id: string, user?: RequestUser) {
     const lead = await this.prisma.lead.findFirst({ where: { id, tenantId, deletedAt: null } });
     if (!lead) throw new NotFoundException(`Lead ${id} not found`);
+    // Wave 16a: strip FLS-gated fields. No-op if user not provided.
+    await this.fls.filterReadable(user, 'lead', lead as unknown as Record<string, unknown>);
     return lead;
   }
 
   async create(tenantId: string, input: Record<string, unknown>, user: RequestUser) {
+    // Wave 16a: reject writes to fields the user lacks writePermission for.
+    await this.fls.assertWritable(user, 'lead', input);
     await this.beforeSave(tenantId, 'lead', input, undefined, user);
     const data = {
       ...input,
@@ -82,11 +115,34 @@ export class LeadService extends BaseEntityService {
       ownerId: (input['ownerId'] as string) || user.id,
     };
     const lead = await this.prisma.lead.create({ data: data as any });
+    // Customer 360: resolve identity and link to canonical Person
+    try {
+      const resolution = await this.identity.resolve(tenantId, {
+        firstName: lead.firstName,
+        lastName: lead.lastName,
+        email: lead.email,
+        phone: lead.phone,
+        mobile: lead.mobile,
+        source: 'lead',
+        sourceId: lead.id,
+      });
+      await this.prisma.lead.update({
+        where: { id: lead.id },
+        data: { personId: resolution.personId },
+      });
+      (lead as Record<string, unknown>)['personId'] = resolution.personId;
+    } catch (e) {
+      // Identity resolution failures shouldn't block lead creation
+      // (the row still exists, it just lacks a Person link until reconcile)
+    }
     await this.afterCreate(tenantId, 'lead', lead as Record<string, unknown>, user);
     return lead;
   }
 
   async update(tenantId: string, id: string, input: Record<string, unknown>, user: RequestUser) {
+    // Wave 16a: reject writes to fields the user lacks writePermission for.
+    await this.fls.assertWritable(user, 'lead', input);
+    // Internal previous-fetch — pass no user so we get the unfiltered record for diffing.
     const previous = await this.get(tenantId, id);
     await this.beforeSave(tenantId, 'lead', input, previous as Record<string, unknown>, user);
     const lead = await this.prisma.lead.update({
@@ -170,11 +226,13 @@ export class LeadService extends BaseEntityService {
     return result;
   }
 
-  async softDelete(tenantId: string, id: string) {
-    await this.get(tenantId, id);
-    return this.prisma.lead.update({
+  async softDelete(tenantId: string, id: string, user?: RequestUser) {
+    const previous = await this.get(tenantId, id);
+    const lead = await this.prisma.lead.update({
       where: { id },
       data: { deletedAt: new Date() } as any,
     });
+    await this.afterSoftDelete(tenantId, 'lead', previous as Record<string, unknown>, user);
+    return lead;
   }
 }

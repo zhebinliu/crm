@@ -70,7 +70,7 @@ export class OpportunityResolver {
     @GqlCurrentUser() user: RequestUser,
     @Args('id', { type: () => ID }) id: string,
   ) {
-    await this.opportunities.softDelete(user.tenantId, id);
+    await this.opportunities.softDelete(user.tenantId, id, user);
     return true;
   }
 }

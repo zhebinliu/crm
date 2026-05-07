@@ -10,6 +10,7 @@ import { OutboxService } from '../../common/outbox.service';
 import { EVENTS, STAGE_PROBABILITY, STAGE_FORECAST } from '@tokenwave/shared';
 import type { OpportunityStage } from '@tokenwave/shared';
 import type { RequestUser } from '../../common/types/request-context';
+import { RecycleBinService } from '../recycle-bin/recycle-bin.service';
 
 export interface OppListOptions {
   search?: string;
@@ -40,8 +41,9 @@ export class OpportunityService extends BaseEntityService {
     audit: AuditService,
     emitter: EventEmitter2,
     outbox: OutboxService,
+    recycleBin: RecycleBinService,
   ) {
-    super(workflow, validation, audit, emitter, outbox);
+    super(workflow, validation, audit, emitter, outbox, recycleBin);
   }
 
   async list(tenantId: string, opts: OppListOptions = {}) {
@@ -229,12 +231,13 @@ export class OpportunityService extends BaseEntityService {
     return this.recalculateAmount(oppId);
   }
 
-  async softDelete(tenantId: string, id: string) {
-    await this.get(tenantId, id);
+  async softDelete(tenantId: string, id: string, user?: RequestUser) {
+    const previous = await this.get(tenantId, id);
     await this.prisma.opportunity.update({
       where: { id },
       data: { deletedAt: new Date() },
     });
+    await this.afterSoftDelete(tenantId, 'opportunity', previous as Record<string, unknown>, user);
   }
 
   private async recalculateAmount(oppId: string) {

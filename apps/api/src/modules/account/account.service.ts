@@ -6,6 +6,7 @@ import { WorkflowService } from '../workflow/workflow.service';
 import { ValidationRuleService } from '../workflow/validation-rule.service';
 import { AuditService } from '../workflow/audit.service';
 import { OutboxService } from '../../common/outbox.service';
+import { EmbeddingService, accountContent } from '../embeddings/embedding.service';
 import type { RequestUser } from '../../common/types/request-context';
 
 export interface AccountListOptions {
@@ -25,8 +26,25 @@ export class AccountService extends BaseEntityService {
     audit: AuditService,
     emitter: EventEmitter2,
     outbox: OutboxService,
+    embeddings: EmbeddingService,
   ) {
     super(workflow, validation, audit, emitter, outbox);
+    this.embeddings = embeddings;
+  }
+
+  /** Project an Account into the text we embed for RAG. */
+  protected buildEmbeddingContent(
+    objectApiName: string,
+    record: Record<string, unknown>,
+  ): string | null {
+    if (objectApiName !== 'account') return null;
+    return accountContent({
+      name: record['name'] as string | null,
+      industry: record['industry'] as string | null,
+      type: record['type'] as string | null,
+      website: record['website'] as string | null,
+      description: record['description'] as string | null,
+    });
   }
 
   async list(tenantId: string, opts: AccountListOptions = {}) {

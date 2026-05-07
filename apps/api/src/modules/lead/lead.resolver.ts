@@ -33,7 +33,7 @@ export class LeadResolver {
       isConverted,
       skip,
       take,
-    });
+    }, user);
     return { data: res.data, total: res.total };
   }
 
@@ -43,7 +43,7 @@ export class LeadResolver {
     @GqlCurrentUser() user: RequestUser,
     @Args('id', { type: () => ID }) id: string,
   ) {
-    return this.leads.get(user.tenantId, id);
+    return this.leads.get(user.tenantId, id, user);
   }
 
   @Mutation(() => Lead)
@@ -71,7 +71,7 @@ export class LeadResolver {
     @GqlCurrentUser() user: RequestUser,
     @Args('id', { type: () => ID }) id: string,
   ) {
-    await this.leads.softDelete(user.tenantId, id);
+    await this.leads.softDelete(user.tenantId, id, user);
     return true;
   }
 

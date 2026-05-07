@@ -9,12 +9,12 @@ export class RecordController {
 
   @Get(':objectApiName')
   async listRecords(@Req() req: any, @Param('objectApiName') objName: string, @Query() query: any) {
-    return this.recordService.listRecords(req.user.tenantId, objName, query);
+    return this.recordService.listRecords(req.user.tenantId, objName, query, req.user);
   }
 
   @Get(':objectApiName/:id')
   async getRecord(@Req() req: any, @Param('objectApiName') objName: string, @Param('id') id: string) {
-    return this.recordService.getRecord(req.user.tenantId, objName, id);
+    return this.recordService.getRecord(req.user.tenantId, objName, id, req.user);
   }
 
   @Post(':objectApiName')

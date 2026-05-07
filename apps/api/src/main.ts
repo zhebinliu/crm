@@ -9,6 +9,8 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     logger: ['error', 'warn', 'log', 'debug'],
+    // Capture raw body for inbound webhook HMAC verification.
+    rawBody: true,
   });
   const config = app.get(ConfigService);
 

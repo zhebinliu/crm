@@ -21,7 +21,16 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
 
   getRequest(context: ExecutionContext) {
     if (context.getType<string>() === 'graphql') {
-      return GqlExecutionContext.create(context).getContext().req;
+      const gqlCtx = GqlExecutionContext.create(context).getContext();
+      // HTTP request flow
+      if (gqlCtx.req) return gqlCtx.req;
+      // WebSocket subscription flow — synthesize a request-like object so
+      // passport-jwt's bearer extractor can read the Authorization header.
+      const cp = gqlCtx.connectionParams as Record<string, string> | undefined;
+      const auth = cp?.Authorization ?? cp?.authorization;
+      return {
+        headers: auth ? { authorization: auth } : {},
+      };
     }
     return context.switchToHttp().getRequest();
   }

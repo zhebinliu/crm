@@ -6,6 +6,7 @@ import { WorkflowService } from '../workflow/workflow.service';
 import { ValidationRuleService } from '../workflow/validation-rule.service';
 import { AuditService } from '../workflow/audit.service';
 import { FormulaService } from '../formula/formula.service';
+import { FlsService } from '../fls/fls.service';
 import type { RequestUser } from '../../common/types/request-context';
 
 @Injectable()
@@ -17,6 +18,7 @@ export class RecordService {
     private readonly validation: ValidationRuleService,
     private readonly audit: AuditService,
     private readonly formula: FormulaService,
+    private readonly fls: FlsService,
   ) {}
 
   private getStandardDelegate(objectApiName: string) {
@@ -88,7 +90,7 @@ export class RecordService {
     return { sanitized, customData };
   }
 
-  async listRecords(tenantId: string, objectApiName: string, query: any) {
+  async listRecords(tenantId: string, objectApiName: string, query: any, user?: RequestUser) {
     const delegate = this.getStandardDelegate(objectApiName);
     let records: any[];
     if (delegate) {
@@ -106,10 +108,12 @@ export class RecordService {
     }
     // Decorate with computed FORMULA-field values (P2b)
     await this.formula.decorateRecords(tenantId, objectApiName, records);
+    // Wave 16a: strip fields the user lacks readPermission for. No-op when no user.
+    await this.fls.filterReadableMany(user, objectApiName, records);
     return records;
   }
 
-  async getRecord(tenantId: string, objectApiName: string, id: string) {
+  async getRecord(tenantId: string, objectApiName: string, id: string, user?: RequestUser) {
     const delegate = this.getStandardDelegate(objectApiName);
     let record: any;
     if (delegate) {
@@ -124,6 +128,8 @@ export class RecordService {
     if (!record) throw new NotFoundException(`Record not found`);
     // Decorate with computed FORMULA-field values (P2b)
     await this.formula.decorateRecord(tenantId, objectApiName, record);
+    // Wave 16a: strip fields the user lacks readPermission for. No-op when no user.
+    await this.fls.filterReadable(user, objectApiName, record);
     return record;
   }
 
@@ -131,6 +137,10 @@ export class RecordService {
     const tenantId = user.tenantId;
     const delegate = this.getStandardDelegate(objectApiName);
     const { sanitized, customData } = await this.sanitizeData(tenantId, objectApiName, data);
+
+    // Wave 16a: reject if user tries to write any field they lack writePermission for.
+    // Check both the sanitized payload and customData (custom fields can also be FLS-gated).
+    await this.fls.assertWritable(user, objectApiName, { ...sanitized, ...customData });
 
     // Try specialized service first (to trigger workflows, validations, etc)
     const specialized = await this.getSpecializedService(objectApiName);
@@ -213,6 +223,9 @@ export class RecordService {
     const tenantId = user.tenantId;
     const delegate = this.getStandardDelegate(objectApiName);
     const { sanitized, customData } = await this.sanitizeData(tenantId, objectApiName, data);
+
+    // Wave 16a: reject if user tries to write any field they lack writePermission for.
+    await this.fls.assertWritable(user, objectApiName, { ...sanitized, ...customData });
 
     // Try specialized service first
     const specialized = await this.getSpecializedService(objectApiName);

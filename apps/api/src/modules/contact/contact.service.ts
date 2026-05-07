@@ -6,6 +6,7 @@ import { WorkflowService } from '../workflow/workflow.service';
 import { ValidationRuleService } from '../workflow/validation-rule.service';
 import { AuditService } from '../workflow/audit.service';
 import { OutboxService } from '../../common/outbox.service';
+import { IdentityResolutionService } from '../person/identity-resolution.service';
 import type { RequestUser } from '../../common/types/request-context';
 
 export interface ContactListOptions {
@@ -24,6 +25,7 @@ export class ContactService extends BaseEntityService {
     audit: AuditService,
     emitter: EventEmitter2,
     outbox: OutboxService,
+    private readonly identity: IdentityResolutionService,
   ) {
     super(workflow, validation, audit, emitter, outbox);
   }
@@ -78,6 +80,25 @@ export class ContactService extends BaseEntityService {
       ownerId: (input['ownerId'] as string) || user.id,
     };
     const contact = await this.prisma.contact.create({ data: data as any });
+    // Customer 360: resolve identity and link to canonical Person
+    try {
+      const resolution = await this.identity.resolve(tenantId, {
+        firstName: contact.firstName,
+        lastName: contact.lastName,
+        email: contact.email,
+        phone: contact.phone,
+        mobile: contact.mobile,
+        source: 'contact',
+        sourceId: contact.id,
+      });
+      await this.prisma.contact.update({
+        where: { id: contact.id },
+        data: { personId: resolution.personId },
+      });
+      (contact as Record<string, unknown>)['personId'] = resolution.personId;
+    } catch {
+      // Non-blocking
+    }
     await this.afterCreate(tenantId, 'contact', contact as Record<string, unknown>, user);
     return contact;
   }

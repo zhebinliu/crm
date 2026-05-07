@@ -1,5 +1,6 @@
 import { Body, Controller, Param, Post, UseGuards } from '@nestjs/common';
 import { IsArray, IsIn, IsOptional, IsString } from 'class-validator';
+import { Throttle } from '@nestjs/throttler';
 import { BulkService, type BulkOp } from './bulk.service';
 import { CurrentUser, TenantId } from '../../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
@@ -31,7 +32,13 @@ export class BulkController {
    * <object>.delete for delete. We use <object>.write as the floor here;
    * the per-record service.create/update/delete may further restrict.
    */
+  // Bulk ops are heavy: hold them to 10/min per (tenant, ip) and disable
+  // the per-second short-tier (a single bulk request is one HTTP call).
   @Post(':objectApiName')
+  @Throttle({
+    short: { limit: 10, ttl: 60_000 },
+    long: { limit: 10, ttl: 60_000 },
+  })
   @RequirePermissions('lead.write') // floor; per-row service still enforces specifics
   bulk(
     @TenantId() tenantId: string,
