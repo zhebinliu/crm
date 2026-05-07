@@ -22,10 +22,20 @@
 // fallback is per-process, so distributed enforcement is best-effort
 // during the outage.
 
-import { Module } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
 import { ThrottlerModule, seconds, minutes } from '@nestjs/throttler';
 import { RedisThrottlerStorage } from './redis-throttler.storage';
 import { TenantThrottlerGuard } from './tenant-throttler.guard';
+
+// Wrap the storage in its own @Global() module so ThrottlerModule's async
+// factory (in another module's import scope) can inject it without a
+// circular import.
+@Global()
+@Module({
+  providers: [RedisThrottlerStorage],
+  exports: [RedisThrottlerStorage],
+})
+export class ThrottlerStorageModule {}
 
 export const RATE_LIMIT_TIERS = {
   default: {
@@ -43,9 +53,9 @@ export const RATE_LIMIT_TIERS = {
 
 @Module({
   imports: [
+    ThrottlerStorageModule, // global; provides RedisThrottlerStorage
     ThrottlerModule.forRootAsync({
-      // RedisThrottlerStorage is provided by this module (below) and
-      // injected into the factory.
+      imports: [ThrottlerStorageModule],
       useFactory: (storage: RedisThrottlerStorage) => ({
         storage,
         // Two named throttlers run in parallel for the default tier.
@@ -66,7 +76,7 @@ export const RATE_LIMIT_TIERS = {
       inject: [RedisThrottlerStorage],
     }),
   ],
-  providers: [RedisThrottlerStorage, TenantThrottlerGuard],
-  exports: [ThrottlerModule, RedisThrottlerStorage, TenantThrottlerGuard],
+  providers: [TenantThrottlerGuard],
+  exports: [ThrottlerModule, TenantThrottlerGuard],
 })
 export class AppThrottlerModule {}

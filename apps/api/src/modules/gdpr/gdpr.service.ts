@@ -64,11 +64,43 @@ interface RelatedRecordIds {
 export class GdprService {
   constructor(private readonly prisma: PrismaService) {}
 
-  // ── Resolution: given a Lead/Contact id, find the full identity graph ──
+  // ── Resolution: given a Person/Lead/Contact id, find the full identity graph ──
   private async findRelatedRecordIds(
     tenantId: string,
     subjectId: string,
-  ): Promise<RelatedRecordIds & { sourceType: 'lead' | 'contact' }> {
+  ): Promise<RelatedRecordIds & { sourceType: 'person' | 'lead' | 'contact' }> {
+    // Wave 14 introduced canonical Person identity. Try Person first; if it
+    // resolves we directly enumerate every Lead/Contact pointing at it.
+    const person = await this.prisma.person.findFirst({
+      where: { id: subjectId, tenantId },
+      select: { id: true, primaryEmail: true, lastName: true },
+    });
+    if (person) {
+      const [leads, contactsRaw] = await Promise.all([
+        this.prisma.lead.findMany({
+          where: { tenantId, personId: person.id },
+          select: { id: true },
+        }),
+        this.prisma.contact.findMany({
+          where: { tenantId, personId: person.id },
+          select: { id: true, accountId: true },
+        }),
+      ]);
+      const accountIds = Array.from(
+        new Set(contactsRaw.map((c) => c.accountId).filter((v): v is string => !!v)),
+      );
+      return {
+        sourceType: 'person',
+        email: person.primaryEmail,
+        lastName: person.lastName,
+        leadIds: leads.map((l) => l.id),
+        contactIds: contactsRaw.map((c) => c.id),
+        accountIds,
+      };
+    }
+
+    // Fall back to Lead.id or Contact.id (legacy callers + flows where Person
+    // hasn't been linked yet).
     const lead = await this.prisma.lead.findFirst({
       where: { id: subjectId, tenantId },
       select: { id: true, email: true, lastName: true },

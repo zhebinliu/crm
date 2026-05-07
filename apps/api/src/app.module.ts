@@ -43,6 +43,12 @@ import { BulkModule } from './modules/bulk/bulk.module';
 import { FormulaModule } from './modules/formula/formula.module';
 import { PersonModule } from './modules/person/person.module';
 import { EventsModule } from './modules/events/events.module';
+import { FlsModule } from './modules/fls/fls.module';
+import { RecycleBinModule } from './modules/recycle-bin/recycle-bin.module';
+import { GdprModule } from './modules/gdpr/gdpr.module';
+import { EmbeddingsModule } from './modules/embeddings/embeddings.module';
+import { AppThrottlerModule } from './common/throttler/throttler.module';
+import { TenantThrottlerGuard } from './common/throttler/tenant-throttler.guard';
 
 import { HealthController } from './health.controller';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
@@ -112,9 +118,16 @@ import { PermissionsGuard } from './common/guards/permissions.guard';
     FormulaModule,
     PersonModule,
     EventsModule,
+    FlsModule,
+    RecycleBinModule,
+    GdprModule,
+    EmbeddingsModule,
+    AppThrottlerModule,
   ],
   controllers: [HealthController],
   providers: [
+    // Order matters: throttler first (cheap reject), then auth, then permissions.
+    { provide: APP_GUARD, useClass: TenantThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: PermissionsGuard },
   ],
