@@ -14,6 +14,7 @@ import { ConvertLeadModal } from './convert-lead-modal';
 import { LeadScoreCard } from '@/components/ai/lead-score-card';
 import { LeadOutreachDrawer } from '@/components/ai/lead-outreach-drawer';
 import { CustomFieldsCard } from '@/components/dynamic/custom-fields-card';
+import { InlineEditField } from '@/components/crm/inline-edit-field';
 import {
   ArrowLeft,
   Edit2,
@@ -268,38 +269,48 @@ export default function LeadDetailPage() {
             <InfoRow
               icon={<Building2 size={15} />}
               label="公司"
-              value={lead.company}
+              value={
+                <InlineEditField
+                  value={lead.company}
+                  onSave={(v) => leadsApi.update(id, { company: v })}
+                  invalidateKeys={['lead']}
+                />
+              }
             />
             <InfoRow
               icon={<Mail size={15} />}
               label="邮箱"
               value={
-                lead.email ? (
-                  <a
-                    href={`mailto:${lead.email}`}
-                    className="text-brand hover:underline"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {lead.email}
-                  </a>
-                ) : null
+                <InlineEditField
+                  value={lead.email}
+                  onSave={(v) => leadsApi.update(id, { email: v })}
+                  invalidateKeys={['lead']}
+                  renderRead={(v) => v ? <a href={`mailto:${v}`} className="text-brand hover:underline" onClick={(e) => e.stopPropagation()}>{String(v)}</a> : '未填写'}
+                />
               }
             />
             <InfoRow
               icon={<Phone size={15} />}
               label="电话"
               value={
-                lead.phone ? (
-                  <a href={`tel:${lead.phone}`} className="text-brand hover:underline">
-                    {lead.phone}
-                  </a>
-                ) : null
+                <InlineEditField
+                  value={lead.phone}
+                  onSave={(v) => leadsApi.update(id, { phone: v })}
+                  invalidateKeys={['lead']}
+                  renderRead={(v) => v ? <a href={`tel:${v}`} className="text-brand hover:underline">{String(v)}</a> : '未填写'}
+                />
               }
             />
             <InfoRow
               icon={<Globe size={15} />}
               label="来源"
-              value={lead.source}
+              value={
+                <InlineEditField
+                  value={lead.source}
+                  onSave={(v) => leadsApi.update(id, { source: v })}
+                  invalidateKeys={['lead']}
+                />
+              }
             />
           </CardContent>
         </Card>
@@ -319,12 +330,26 @@ export default function LeadDetailPage() {
             <InfoRow
               icon={<BarChart2 size={15} />}
               label="年收入"
-              value={lead.annualRevenue ? fmtMoney(lead.annualRevenue) : null}
+              value={
+                <InlineEditField
+                  kind="number"
+                  value={lead.annualRevenue}
+                  onSave={(v) => leadsApi.update(id, { annualRevenue: v })}
+                  invalidateKeys={['lead']}
+                  renderRead={(v) => v ? fmtMoney(v as number) : '未填写'}
+                />
+              }
             />
             <InfoRow
               icon={<Factory size={15} />}
               label="行业"
-              value={lead.industry}
+              value={
+                <InlineEditField
+                  value={lead.industry}
+                  onSave={(v) => leadsApi.update(id, { industry: v })}
+                  invalidateKeys={['lead']}
+                />
+              }
             />
             <InfoRow
               icon={<User size={15} />}

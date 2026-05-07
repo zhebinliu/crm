@@ -8,6 +8,7 @@ import { contactsApi, accountsApi } from '@/lib/api';
 import { ActivityTimeline } from '@/components/crm/activity-timeline';
 import { CustomFieldsCard } from '@/components/dynamic/custom-fields-card';
 import { CustomFieldsSection, type CustomFieldsSectionHandle } from '@/components/dynamic/custom-fields-section';
+import { InlineEditField } from '@/components/crm/inline-edit-field';
 import { fmtDate, cn } from '@/lib/utils';
 import {
   ArrowLeft, User, Mail, Phone, Briefcase,
@@ -395,32 +396,36 @@ export default function ContactDetailPage() {
                   icon={<Mail size={15} />}
                   label="邮箱"
                   value={
-                    contact.email ? (
-                      <a href={`mailto:${contact.email}`} className="text-brand hover:underline">
-                        {contact.email}
-                      </a>
-                    ) : (
-                      <span className="text-slate-300">—</span>
-                    )
+                    <InlineEditField
+                      value={contact.email}
+                      onSave={(v) => contactsApi.update(id, { email: v })}
+                      invalidateKeys={['contact']}
+                      renderRead={(v) => v ? <a href={`mailto:${v}`} className="text-brand hover:underline">{String(v)}</a> : '未填写'}
+                    />
                   }
                 />
                 <InfoItem
                   icon={<Phone size={15} />}
                   label="电话"
                   value={
-                    contact.phone ? (
-                      <a href={`tel:${contact.phone}`} className="hover:text-brand transition-colors">
-                        {contact.phone}
-                      </a>
-                    ) : (
-                      <span className="text-slate-300">—</span>
-                    )
+                    <InlineEditField
+                      value={contact.phone}
+                      onSave={(v) => contactsApi.update(id, { phone: v })}
+                      invalidateKeys={['contact']}
+                      renderRead={(v) => v ? <a href={`tel:${v}`} className="hover:text-brand transition-colors">{String(v)}</a> : '未填写'}
+                    />
                   }
                 />
                 <InfoItem
                   icon={<Briefcase size={15} />}
                   label="部门"
-                  value={contact.department ?? <span className="text-slate-300">—</span>}
+                  value={
+                    <InlineEditField
+                      value={contact.department}
+                      onSave={(v) => contactsApi.update(id, { department: v })}
+                      invalidateKeys={['contact']}
+                    />
+                  }
                 />
                 <InfoItem
                   icon={<Building2 size={15} />}

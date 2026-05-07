@@ -9,6 +9,7 @@ import { ActivityTimeline } from '@/components/crm/activity-timeline';
 import { AccountBriefingCard } from '@/components/ai/account-briefing-card';
 import { CustomFieldsCard } from '@/components/dynamic/custom-fields-card';
 import { CustomFieldsSection, type CustomFieldsSectionHandle } from '@/components/dynamic/custom-fields-section';
+import { InlineEditField } from '@/components/crm/inline-edit-field';
 import { fmtDate, fmtMoney, cn } from '@/lib/utils';
 import {
   ArrowLeft, Building2, Phone, Globe, MapPin,
@@ -405,35 +406,45 @@ export default function AccountDetailPage() {
               </CardHeader>
               <Separator className="bg-slate-50" />
               <CardContent className="px-6 py-5 space-y-5">
-                <InfoItem icon={<Building2 size={15} />} label="行业" value={account.industry ?? <span className="text-slate-300">—</span>} />
-                <InfoItem icon={<Phone size={15} />} label="电话" value={account.phone ?? <span className="text-slate-300">—</span>} />
+                <InfoItem icon={<Building2 size={15} />} label="行业" value={
+                  <InlineEditField value={account.industry} onSave={(v) => accountsApi.update(id, { industry: v })} invalidateKeys={['account']} />
+                } />
+                <InfoItem icon={<Phone size={15} />} label="电话" value={
+                  <InlineEditField value={account.phone} onSave={(v) => accountsApi.update(id, { phone: v })} invalidateKeys={['account']} />
+                } />
                 <InfoItem
                   icon={<Globe size={15} />}
                   label="网站"
                   value={
-                    account.website ? (
-                      <a
-                        href={account.website.startsWith('http') ? account.website : `https://${account.website}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-brand hover:underline truncate block"
-                      >
-                        {account.website}
-                      </a>
-                    ) : (
-                      <span className="text-slate-300">—</span>
-                    )
+                    <InlineEditField
+                      value={account.website}
+                      onSave={(v) => accountsApi.update(id, { website: v })}
+                      invalidateKeys={['account']}
+                      renderRead={(v) => v
+                        ? <a href={String(v).startsWith('http') ? String(v) : `https://${v}`} target="_blank" rel="noopener noreferrer" className="text-brand hover:underline">{String(v)}</a>
+                        : '未填写'}
+                    />
                   }
                 />
                 <InfoItem
                   icon={<span className="text-xs font-black">¥</span>}
                   label="年收入"
-                  value={<span className="text-brand font-bold">{fmtMoney(account.annualRevenue)}</span>}
+                  value={
+                    <InlineEditField
+                      kind="number"
+                      value={account.annualRevenue}
+                      onSave={(v) => accountsApi.update(id, { annualRevenue: v })}
+                      invalidateKeys={['account']}
+                      renderRead={(v) => v != null ? <span className="text-brand font-bold">{fmtMoney(v as number)}</span> : '未填写'}
+                    />
+                  }
                 />
                 <InfoItem
                   icon={<MapPin size={15} />}
                   label="城市"
-                  value={account.billingCity ?? <span className="text-slate-300">—</span>}
+                  value={
+                    <InlineEditField value={account.billingCity} onSave={(v) => accountsApi.update(id, { billingCity: v })} invalidateKeys={['account']} />
+                  }
                 />
                 <InfoItem
                   icon={<Flag size={15} />}
