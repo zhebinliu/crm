@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import {
   Users, Settings,
-  Workflow, Shield, LogOut, ArrowLeft, LayoutDashboard, Database, Mail, Sparkles, History,
+  Workflow, Shield, LogOut, ArrowLeft, LayoutDashboard, Database, Mail, Sparkles, History, ShieldAlert,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth';
 import { useRouter } from 'next/navigation';
@@ -21,6 +21,7 @@ interface NavItem {
 const ADMIN_NAV: NavItem[] = [
   { label: '用户与权限', href: '/admin/users', icon: <Users size={18} /> },
   { label: '工作流自动化', href: '/admin/workflow', icon: <Workflow size={18} /> },
+  { label: '校验规则', href: '/admin/validation-rules', icon: <ShieldAlert size={18} /> },
   { label: '流程审批', href: '/admin/approvals', icon: <Shield size={18} /> },
   { label: '审批流程配置', href: '/admin/approvals/process-config', icon: <LayoutDashboard size={18} /> },
   { label: '邮件模板', href: '/admin/email-templates', icon: <Mail size={18} /> },
