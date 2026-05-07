@@ -186,7 +186,13 @@ export const adminApi = {
   createObject: (d: { apiName: string; label: string; labelPlural: string; iconName?: string }) =>
     api.post('/admin/metadata/objects', d).then((r) => r.data),
   createField: (objectApiName: string, d: unknown) => api.post(`/admin/metadata/objects/${objectApiName}/fields`, d).then((r) => r.data),
+  updateField: (fieldId: string, d: Record<string, unknown>) =>
+    api.put(`/admin/metadata/fields/${fieldId}`, d).then((r) => r.data),
   deleteField: (fieldId: string) => api.delete(`/admin/metadata/fields/${fieldId}`).then((r) => r.data),
+  upsertPicklistValues: (
+    picklistId: string,
+    values: Array<{ value: string; label: string; color?: string; displayOrder?: number; isActive?: boolean; isDefault?: boolean }>,
+  ) => api.put(`/admin/metadata/picklists/${picklistId}/values`, { values }).then((r) => r.data),
   listPicklists: () => api.get('/admin/metadata/picklists').then((r) => r.data),
   getPicklist: (apiName: string) => api.get(`/admin/metadata/picklists/${apiName}`).then((r) => r.data),
   saveLayout: (name: string, layout: unknown) => api.post(`/admin/metadata/objects/${name}/layout`, layout).then((r) => r.data),

@@ -143,10 +143,16 @@ export class MetadataService {
     });
   }
 
-  updateField(tenantId: string, fieldId: string, data: Partial<Parameters<typeof this.createField>[2]>) {
+  async updateField(tenantId: string, fieldId: string, data: Partial<Parameters<typeof this.createField>[2]>) {
+    const existing = await this.prisma.fieldDef.findFirst({ where: { id: fieldId, tenantId } });
+    if (!existing) throw new NotFoundException({ code: 'NOT_FOUND', message: 'Field not found' });
+    // apiName + type are immutable to preserve stored data integrity.
+    // picklistInline is only valid on create.
+    const { apiName: _ignoreApi, type: _ignoreType, picklistInline: _ignoreInline, ...patch } = data;
+    void _ignoreApi; void _ignoreType; void _ignoreInline;
     return this.prisma.fieldDef.update({
       where: { id: fieldId },
-      data: { ...data, defaultValue: data.defaultValue as object | undefined },
+      data: { ...patch, defaultValue: patch.defaultValue as object | undefined },
     });
   }
 
