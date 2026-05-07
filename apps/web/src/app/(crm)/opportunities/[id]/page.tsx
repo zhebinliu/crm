@@ -10,6 +10,7 @@ import { OppWinProbabilityCard } from '@/components/ai/opp-win-probability-card'
 import { OppActivitySummaryCard } from '@/components/ai/opp-activity-summary-card';
 import { CustomFieldsCard } from '@/components/dynamic/custom-fields-card';
 import { CustomFieldsSection, type CustomFieldsSectionHandle } from '@/components/dynamic/custom-fields-section';
+import { InlineEditField } from '@/components/crm/inline-edit-field';
 import { fmtDate, fmtMoney, stageColor, cn } from '@/lib/utils';
 import {
   Card, CardContent, CardHeader, CardTitle,
@@ -577,12 +578,57 @@ function OverviewTab({ opp, onEdit, onDelete, onCreateQuote, quoteLoading }: Ove
             <InfoRow
               label="阶段"
               value={
-                <Badge
-                  variant="outline"
-                  className={cn('border-none font-bold text-xs px-2.5 py-0.5', stageColor(opp.stage))}
-                >
-                  {stageZh(opp.stage)}
-                </Badge>
+                <InlineEditField
+                  kind="select"
+                  value={opp.stage}
+                  options={STAGES.map((s) => ({ value: s.value, label: s.label }))}
+                  onSave={(v) => oppsApi.update(opp.id, { stage: v })}
+                  invalidateKeys={['opportunity']}
+                  renderRead={(v) => (
+                    <Badge
+                      variant="outline"
+                      className={cn('border-none font-bold text-xs px-2.5 py-0.5', stageColor(String(v)))}
+                    >
+                      {stageZh(String(v))}
+                    </Badge>
+                  )}
+                />
+              }
+            />
+            <InfoRow
+              label="预计金额"
+              value={
+                <InlineEditField
+                  kind="number"
+                  value={opp.amount as number | null}
+                  onSave={(v) => oppsApi.update(opp.id, { amount: v })}
+                  invalidateKeys={['opportunity']}
+                  renderRead={(v) => v != null ? fmtMoney(v as number) : '未填写'}
+                />
+              }
+            />
+            <InfoRow
+              label="预计关闭日期"
+              value={
+                <InlineEditField
+                  kind="date"
+                  value={opp.closeDate}
+                  onSave={(v) => oppsApi.update(opp.id, { closeDate: v })}
+                  invalidateKeys={['opportunity']}
+                />
+              }
+            />
+            <InfoRow
+              label="下一步行动"
+              value={
+                <InlineEditField
+                  kind="textarea"
+                  rows={2}
+                  value={(opp as unknown as { nextStep?: string | null }).nextStep ?? null}
+                  onSave={(v) => oppsApi.update(opp.id, { nextStep: v })}
+                  invalidateKeys={['opportunity']}
+                  placeholder="点击添加下一步…"
+                />
               }
             />
             <InfoRow
