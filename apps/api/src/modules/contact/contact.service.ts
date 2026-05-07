@@ -7,7 +7,9 @@ import { ValidationRuleService } from '../workflow/validation-rule.service';
 import { AuditService } from '../workflow/audit.service';
 import { OutboxService } from '../../common/outbox.service';
 import { IdentityResolutionService } from '../person/identity-resolution.service';
+import { EmbeddingService, contactContent } from '../embeddings/embedding.service';
 import type { RequestUser } from '../../common/types/request-context';
+import { RecycleBinService } from '../recycle-bin/recycle-bin.service';
 
 export interface ContactListOptions {
   accountId?: string;
@@ -25,9 +27,29 @@ export class ContactService extends BaseEntityService {
     audit: AuditService,
     emitter: EventEmitter2,
     outbox: OutboxService,
+    recycleBin: RecycleBinService,
     private readonly identity: IdentityResolutionService,
+    embeddings: EmbeddingService,
   ) {
-    super(workflow, validation, audit, emitter, outbox);
+    super(workflow, validation, audit, emitter, outbox, recycleBin);
+    this.embeddings = embeddings;
+  }
+
+  /** Project a Contact into the text we embed for RAG. */
+  protected buildEmbeddingContent(
+    objectApiName: string,
+    record: Record<string, unknown>,
+  ): string | null {
+    if (objectApiName !== 'contact') return null;
+    return contactContent({
+      firstName: record['firstName'] as string | null,
+      lastName: record['lastName'] as string | null,
+      title: record['title'] as string | null,
+      department: record['department'] as string | null,
+      email: record['email'] as string | null,
+      phone: record['phone'] as string | null,
+      mobile: record['mobile'] as string | null,
+    });
   }
 
   async list(tenantId: string, opts: ContactListOptions = {}) {
@@ -114,11 +136,13 @@ export class ContactService extends BaseEntityService {
     return contact;
   }
 
-  async softDelete(tenantId: string, id: string) {
-    await this.get(tenantId, id);
-    return this.prisma.contact.update({
+  async softDelete(tenantId: string, id: string, user?: RequestUser) {
+    const previous = await this.get(tenantId, id);
+    const contact = await this.prisma.contact.update({
       where: { id },
       data: { deletedAt: new Date() } as any,
     });
+    await this.afterSoftDelete(tenantId, 'contact', previous as Record<string, unknown>, user);
+    return contact;
   }
 }

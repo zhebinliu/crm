@@ -249,6 +249,51 @@ export function accountContent(a: {
     .join(' • ');
 }
 
+export function contactContent(c: {
+  firstName?: string | null; lastName?: string | null; title?: string | null;
+  department?: string | null; email?: string | null; phone?: string | null;
+  mobile?: string | null;
+}): string {
+  const fullName = [c.firstName, c.lastName].filter(Boolean).join(' ');
+  return [fullName, c.title, c.department, c.email, c.phone, c.mobile]
+    .filter((s) => s && String(s).trim())
+    .join(' • ');
+}
+
+export function opportunityContent(o: {
+  name?: string | null; stage?: string | null; amount?: unknown;
+  accountName?: string | null; type?: string | null; leadSource?: string | null;
+  nextStep?: string | null; description?: string | null;
+}): string {
+  const amountStr = o.amount != null && String(o.amount).trim() ? String(o.amount) : null;
+  return [
+    o.name, o.stage, amountStr, o.accountName, o.type, o.leadSource, o.nextStep, o.description,
+  ]
+    .filter((s) => s && String(s).trim())
+    .join(' • ');
+}
+
+export function activityContent(a: {
+  subject?: string | null; type?: string | null; description?: string | null;
+  status?: string | null; priority?: string | null; dueDate?: unknown;
+}): string {
+  const dueStr = a.dueDate
+    ? (a.dueDate instanceof Date ? a.dueDate.toISOString() : String(a.dueDate))
+    : null;
+  return [a.subject, a.type, a.status, a.priority, dueStr, a.description]
+    .filter((s) => s && String(s).trim())
+    .join(' • ');
+}
+
+export function caseContent(c: {
+  caseNumber?: string | null; subject?: string | null; description?: string | null;
+  status?: string | null; priority?: string | null; source?: string | null;
+}): string {
+  return [c.caseNumber, c.subject, c.status, c.priority, c.source, c.description]
+    .filter((s) => s && String(s).trim())
+    .join(' • ');
+}
+
 function sha256(s: string): string {
   return createHash('sha256').update(s).digest('hex');
 }

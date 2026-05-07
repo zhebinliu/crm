@@ -17,6 +17,8 @@ import { AuditService } from '../workflow/audit.service';
 import { OutboxService } from '../../common/outbox.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { RequestUser } from '../../common/types/request-context';
+import { RecycleBinService } from '../recycle-bin/recycle-bin.service';
+import { EmbeddingService, caseContent } from '../embeddings/embedding.service';
 
 export interface CaseListOptions {
   search?: string;
@@ -39,8 +41,27 @@ export class CaseService extends BaseEntityService {
     audit: AuditService,
     emitter: EventEmitter2,
     outbox: OutboxService,
+    recycleBin: RecycleBinService,
+    embeddings: EmbeddingService,
   ) {
-    super(workflow, validation, audit, emitter, outbox);
+    super(workflow, validation, audit, emitter, outbox, recycleBin);
+    this.embeddings = embeddings;
+  }
+
+  /** Project a Case into the text we embed for RAG. */
+  protected buildEmbeddingContent(
+    objectApiName: string,
+    record: Record<string, unknown>,
+  ): string | null {
+    if (objectApiName !== 'case') return null;
+    return caseContent({
+      caseNumber: record['caseNumber'] as string | null,
+      subject: record['subject'] as string | null,
+      description: record['description'] as string | null,
+      status: record['status'] as string | null,
+      priority: record['priority'] as string | null,
+      source: record['source'] as string | null,
+    });
   }
 
   async list(tenantId: string, opts: CaseListOptions = {}) {
@@ -127,9 +148,10 @@ export class CaseService extends BaseEntityService {
     return updated;
   }
 
-  async softDelete(tenantId: string, id: string) {
-    await this.get(tenantId, id);
+  async softDelete(tenantId: string, id: string, user?: RequestUser) {
+    const previous = await this.get(tenantId, id);
     await this.prisma.case.update({ where: { id }, data: { deletedAt: new Date() } });
+    await this.afterSoftDelete(tenantId, 'case', previous as Record<string, unknown>, user);
   }
 
   // ── Comments ─────────────────────────────────────────────────────────────

@@ -8,6 +8,7 @@ import { ValidationRuleService } from '../workflow/validation-rule.service';
 import { AuditService } from '../workflow/audit.service';
 import { OutboxService } from '../../common/outbox.service';
 import type { RequestUser } from '../../common/types/request-context';
+import { RecycleBinService } from '../recycle-bin/recycle-bin.service';
 
 export interface QuoteListOptions {
   opportunityId?: string;
@@ -35,8 +36,9 @@ export class QuoteService extends BaseEntityService {
     audit: AuditService,
     emitter: EventEmitter2,
     outbox: OutboxService,
+    recycleBin: RecycleBinService,
   ) {
-    super(workflow, validation, audit, emitter, outbox);
+    super(workflow, validation, audit, emitter, outbox, recycleBin);
   }
 
   async list(tenantId: string, opts: QuoteListOptions = {}) {
@@ -185,9 +187,10 @@ export class QuoteService extends BaseEntityService {
     return this.recalculateTotals(quoteId);
   }
 
-  async softDelete(tenantId: string, id: string) {
-    await this.get(tenantId, id);
+  async softDelete(tenantId: string, id: string, user?: RequestUser) {
+    const previous = await this.get(tenantId, id);
     await this.prisma.quote.update({ where: { id }, data: { deletedAt: new Date() } });
+    await this.afterSoftDelete(tenantId, 'quote', previous as Record<string, unknown>, user);
   }
 
   private async recalculateTotals(quoteId: string) {

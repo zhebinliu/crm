@@ -8,6 +8,7 @@ import { AuditService } from '../workflow/audit.service';
 import { OutboxService } from '../../common/outbox.service';
 import { EmbeddingService, accountContent } from '../embeddings/embedding.service';
 import type { RequestUser } from '../../common/types/request-context';
+import { RecycleBinService } from '../recycle-bin/recycle-bin.service';
 
 export interface AccountListOptions {
   search?: string;
@@ -26,9 +27,10 @@ export class AccountService extends BaseEntityService {
     audit: AuditService,
     emitter: EventEmitter2,
     outbox: OutboxService,
+    recycleBin: RecycleBinService,
     embeddings: EmbeddingService,
   ) {
-    super(workflow, validation, audit, emitter, outbox);
+    super(workflow, validation, audit, emitter, outbox, recycleBin);
     this.embeddings = embeddings;
   }
 
@@ -120,11 +122,13 @@ export class AccountService extends BaseEntityService {
     return account;
   }
 
-  async softDelete(tenantId: string, id: string) {
-    await this.get(tenantId, id);
-    return this.prisma.account.update({
+  async softDelete(tenantId: string, id: string, user?: RequestUser) {
+    const previous = await this.get(tenantId, id);
+    const account = await this.prisma.account.update({
       where: { id },
       data: { deletedAt: new Date() } as any,
     });
+    await this.afterSoftDelete(tenantId, 'account', previous as Record<string, unknown>, user);
+    return account;
   }
 }
