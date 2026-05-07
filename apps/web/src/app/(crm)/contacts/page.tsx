@@ -199,6 +199,7 @@ export default function ContactsPage() {
       <DataTable
         data={contacts}
         columns={columns}
+        exportFilename="contacts"
         onRowClick={(row) => router.push(`/contacts/${row.id}`)}
         onDelete={(ids) => deleteMutation.mutateAsync(ids)}
         onUpdate={(id, field, value) => inlineUpdateMutation.mutateAsync({ id, field, value })}

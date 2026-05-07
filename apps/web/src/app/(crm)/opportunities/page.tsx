@@ -164,6 +164,7 @@ function ListView({ opps, onRowClick }: ListViewProps) {
     <DataTable
       data={opps}
       columns={columns}
+      exportFilename="opportunities"
       onRowClick={onRowClick}
       queryKey={['opportunities']}
       onUpdate={(id, field, value) => oppsApi.update(id, { [field]: value })}

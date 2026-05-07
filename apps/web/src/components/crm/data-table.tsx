@@ -37,6 +37,10 @@ interface DataTableProps<T extends { id: string }> {
   queryKey?: string[];
   loading?: boolean;
   rowClassName?: string;
+  /** Optional download filename prefix, e.g. "leads" → leads_2025-01-12.csv */
+  exportFilename?: string;
+  /** When true, an "导出全部" button is always rendered above the table. */
+  showExportAll?: boolean;
 }
 
 export function DataTable<T extends { id: string }>({
@@ -49,6 +53,8 @@ export function DataTable<T extends { id: string }>({
   queryKey = ['data'],
   loading = false,
   rowClassName,
+  exportFilename,
+  showExportAll = true,
 }: DataTableProps<T>) {
   const qc = useQueryClient();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -188,10 +194,12 @@ export function DataTable<T extends { id: string }>({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `export_${Date.now()}.csv`;
+    const ymd = new Date().toISOString().slice(0, 10);
+    const prefix = exportFilename ?? 'export';
+    a.download = `${prefix}_${ymd}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [data, selectedIds, columns]);
+  }, [data, selectedIds, columns, exportFilename]);
 
   // Bulk update handlers
   const handleBulkUpdateConfirm = () => {
@@ -338,6 +346,24 @@ export function DataTable<T extends { id: string }>({
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Toolbar */}
+      {showExportAll && !isSomeSelected && data.length > 0 && (
+        <div className="flex items-center justify-between mb-2 px-1">
+          <span className="text-xs font-bold text-slate-400">
+            共 <span className="font-black text-ink">{data.length}</span> 条
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleExportCsv}
+            className="h-8 rounded-lg text-slate-500 hover:text-ink hover:bg-slate-100 gap-1.5 text-xs font-bold"
+          >
+            <Download size={13} />
+            导出 CSV
+          </Button>
         </div>
       )}
 
