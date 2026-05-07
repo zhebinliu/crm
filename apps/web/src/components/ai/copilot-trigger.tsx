@@ -9,17 +9,33 @@ import { cn } from '@/lib/utils';
 
 export function CopilotTrigger() {
   const [open, setOpen] = useState(false);
+  const [forwardedQuery, setForwardedQuery] = useState<string | null>(null);
 
-  // Cmd/Ctrl + K shortcut to toggle the copilot.
+  // Cmd/Ctrl + J shortcut to toggle the copilot.
+  // (⌘K is now reserved for the global command palette.)
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'j') {
         e.preventDefault();
         setOpen((v) => !v);
       }
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  // Allow other components (e.g. CommandPalette) to forward a question into
+  // the Copilot via window event "tw:copilot-ask".
+  useEffect(() => {
+    function onAsk(e: Event) {
+      const detail = (e as CustomEvent<{ message?: string }>).detail;
+      if (detail?.message) {
+        setForwardedQuery(detail.message);
+        setOpen(true);
+      }
+    }
+    window.addEventListener('tw:copilot-ask', onAsk);
+    return () => window.removeEventListener('tw:copilot-ask', onAsk);
   }, []);
 
   return (
@@ -36,14 +52,19 @@ export function CopilotTrigger() {
             'shadow-2xl shadow-violet-300/50 hover:shadow-violet-400/60',
             'transition-all hover:-translate-y-0.5',
           )}
-          title="AI 助手 (⌘K)"
+          title="AI 助手 (⌘J)"
         >
           <Sparkles size={16} />
           <span className="hidden sm:inline">问小销</span>
-          <kbd className="hidden sm:inline text-[10px] px-1.5 py-0.5 rounded bg-white/20 text-white/90 font-mono">⌘K</kbd>
+          <kbd className="hidden sm:inline text-[10px] px-1.5 py-0.5 rounded bg-white/20 text-white/90 font-mono">⌘J</kbd>
         </button>
       )}
-      <CopilotPanel open={open} onClose={() => setOpen(false)} />
+      <CopilotPanel
+        open={open}
+        onClose={() => { setOpen(false); setForwardedQuery(null); }}
+        forwardedQuery={forwardedQuery}
+        onForwardedConsumed={() => setForwardedQuery(null)}
+      />
     </>
   );
 }

@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { leadsApi } from '@/lib/api';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { CustomFieldsSection, type CustomFieldsSectionHandle } from '@/components/dynamic/custom-fields-section';
 
 interface LeadFormModalProps {
   open: boolean;
@@ -24,7 +25,9 @@ const EMPTY_FORM = {
 export function LeadFormModal({ open, onClose, lead, onSuccess }: LeadFormModalProps) {
   const qc = useQueryClient();
   const [form, setForm] = useState(EMPTY_FORM);
+  const [customFields, setCustomFields] = useState<Record<string, unknown>>({});
   const [error, setError] = useState('');
+  const customRef = useRef<CustomFieldsSectionHandle>(null);
 
   useEffect(() => {
     if (open) {
@@ -42,11 +45,12 @@ export function LeadFormModal({ open, onClose, lead, onSuccess }: LeadFormModalP
         industry: lead.industry ?? '',
         description: lead.description ?? '',
       } : { ...EMPTY_FORM });
+      setCustomFields(lead?.customFields ?? {});
     }
   }, [open, lead]);
 
   const mutation = useMutation({
-    mutationFn: (d: typeof form) =>
+    mutationFn: (d: Record<string, unknown>) =>
       lead ? leadsApi.update(lead.id, d) : leadsApi.create(d),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['leads'] });
@@ -65,7 +69,15 @@ export function LeadFormModal({ open, onClose, lead, onSuccess }: LeadFormModalP
       setError('姓氏和公司为必填项');
       return;
     }
-    mutation.mutate(form);
+    if (customRef.current && !customRef.current.validate()) {
+      setError('部分自定义字段填写有误，请检查');
+      return;
+    }
+    const payload: Record<string, unknown> = { ...form };
+    if (Object.keys(customFields).length > 0) {
+      payload.customFields = customFields;
+    }
+    mutation.mutate(payload);
   }
 
   const f = (key: keyof typeof form) => ({
@@ -147,6 +159,14 @@ export function LeadFormModal({ open, onClose, lead, onSuccess }: LeadFormModalP
             <Label>备注</Label>
             <Textarea {...f('description')} placeholder="线索描述或备注" className="rounded-xl resize-none" rows={3} />
           </div>
+
+          <CustomFieldsSection
+            ref={customRef}
+            objectApiName="Lead"
+            value={customFields}
+            onChange={setCustomFields}
+            initial={lead?.customFields ?? null}
+          />
 
           {error && (
             <p className="text-sm text-red-500 bg-red-50 rounded-xl px-3 py-2">{error}</p>

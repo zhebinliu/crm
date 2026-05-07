@@ -6,6 +6,7 @@ import { useSidebar, SidebarProvider } from '@/components/layout/sidebar-context
 import { useAuthStore } from '@/stores/auth';
 import { CopilotTrigger } from '@/components/ai/copilot-trigger';
 import { NotificationBell } from '@/components/notifications/notification-bell';
+import { CommandPalette } from '@/components/command-palette/command-palette';
 
 function CrmLayoutContent({ children }: { children: React.ReactNode }) {
   const { user } = useAuthStore();
@@ -29,6 +30,7 @@ function CrmLayoutContent({ children }: { children: React.ReactNode }) {
       </main>
       <NotificationBell />
       <CopilotTrigger />
+      <CommandPalette />
     </div>
   );
 }

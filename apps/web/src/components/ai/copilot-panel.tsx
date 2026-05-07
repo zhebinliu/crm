@@ -62,9 +62,12 @@ const STARTER_PROMPTS = [
 interface Props {
   open: boolean;
   onClose: () => void;
+  /** When supplied, the panel auto-sends this as the next user message. */
+  forwardedQuery?: string | null;
+  onForwardedConsumed?: () => void;
 }
 
-export function CopilotPanel({ open, onClose }: Props) {
+export function CopilotPanel({ open, onClose, forwardedQuery, onForwardedConsumed }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState('');
   const [meta, setMeta] = useState<ChatMeta | null>(null);
@@ -98,6 +101,15 @@ export function CopilotPanel({ open, onClose }: Props) {
 
   // Cancel any in-flight stream when the panel unmounts.
   useEffect(() => () => cancelStreamRef.current?.(), []);
+
+  // Auto-send forwarded query (e.g. from CommandPalette "Ask AI" row).
+  useEffect(() => {
+    if (forwardedQuery && open && !streaming) {
+      startStream(forwardedQuery);
+      onForwardedConsumed?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [forwardedQuery, open]);
 
   function startStream(text: string) {
     if (streaming) return;
