@@ -47,6 +47,14 @@ const ACTION_TYPES = [
   { value: 'update_field', label: '更新字段值' },
   { value: 'create_task', label: '自动创建任务' },
   { value: 'send_email', label: '发送通知邮件' },
+  { value: 'ai_generate_insight', label: 'AI 生成洞察 (Beta)' },
+];
+
+const AI_KINDS = [
+  { value: 'OPP_WIN_PROBABILITY', label: '商机赢单分析（OPP_WIN_PROBABILITY）' },
+  { value: 'OPP_ACTIVITY_SUMMARY', label: '商机时间线总结（OPP_ACTIVITY_SUMMARY）' },
+  { value: 'LEAD_SCORE', label: '线索 AI 评分（LEAD_SCORE）' },
+  { value: 'ACCOUNT_BRIEFING', label: '客户 60 秒 Briefing（ACCOUNT_BRIEFING）' },
 ];
 
 interface Rule {
@@ -511,20 +519,74 @@ export function RuleFormModal({ rule, onClose }: { rule?: Rule; onClose: () => v
                             </div>
                           )}
                           
-                          {!['update_field', 'create_task', 'send_email'].includes(act.type) && (
+                          {act.type === 'ai_generate_insight' && (
+                            <div className="grid grid-cols-1 gap-3 pt-3 border-t border-slate-100">
+                              <div className="space-y-1.5">
+                                <Label className="text-[10px] font-bold text-ink-secondary uppercase">洞察类型</Label>
+                                <select
+                                  className="w-full h-9 px-3 rounded-md border border-slate-200 bg-white text-xs"
+                                  value={act.params?.kind || ''}
+                                  onChange={(e) => {
+                                    const newActs = [...actions];
+                                    newActs[idx].params = { ...newActs[idx].params, kind: e.target.value };
+                                    setActions(newActs);
+                                  }}
+                                >
+                                  <option value="">— 请选择 —</option>
+                                  {AI_KINDS.map((k) => (
+                                    <option key={k.value} value={k.value}>{k.label}</option>
+                                  ))}
+                                </select>
+                                <p className="text-[10px] text-slate-400 font-medium">需要触发对象与洞察类型一致（OPP_* → Opportunity / LEAD_* → Lead / ACCOUNT_* → Account）。</p>
+                              </div>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
+                                  <Label className="text-[10px] font-bold text-ink-secondary uppercase">目标 ID 路径</Label>
+                                  <Input
+                                    className="h-9 text-xs border-slate-200 font-mono"
+                                    placeholder="$record.id"
+                                    value={act.params?.targetId || ''}
+                                    onChange={(e) => {
+                                      const newActs = [...actions];
+                                      newActs[idx].params = { ...newActs[idx].params, targetId: e.target.value };
+                                      setActions(newActs);
+                                    }}
+                                  />
+                                  <p className="text-[10px] text-slate-400 font-medium">默认 $record.id；可改为关联字段路径，如 $record.accountId。</p>
+                                </div>
+                                <div className="space-y-1.5">
+                                  <Label className="text-[10px] font-bold text-ink-secondary uppercase">强制重新生成</Label>
+                                  <select
+                                    className="w-full h-9 px-3 rounded-md border border-slate-200 bg-white text-xs"
+                                    value={String(act.params?.force ?? false)}
+                                    onChange={(e) => {
+                                      const newActs = [...actions];
+                                      newActs[idx].params = { ...newActs[idx].params, force: e.target.value === 'true' };
+                                      setActions(newActs);
+                                    }}
+                                  >
+                                    <option value="false">否（命中缓存则复用）</option>
+                                    <option value="true">是（绕过缓存重新调用 LLM）</option>
+                                  </select>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {!['update_field', 'create_task', 'send_email', 'ai_generate_insight'].includes(act.type) && (
                             <div className="space-y-1.5 font-mono">
                                <Label className="text-[10px] font-bold text-ink-secondary uppercase">动作参数 (JSON 格式)</Label>
-                               <textarea 
-                                 className="w-full rounded-md border border-slate-200 bg-slate-50 p-2 text-xs focus:ring-1 focus:ring-brand outline-none" 
-                                 rows={4} 
+                               <textarea
+                                 className="w-full rounded-md border border-slate-200 bg-slate-50 p-2 text-xs focus:ring-1 focus:ring-brand outline-none"
+                                 rows={4}
                                  placeholder='{"key": "value"}'
                                  value={typeof act.params === 'string' ? act.params : JSON.stringify(act.params || {}, null, 2)}
                                  onChange={(e) => {
                                    const newActs = [...actions];
-                                   try { newActs[idx].params = JSON.parse(e.target.value); } 
+                                   try { newActs[idx].params = JSON.parse(e.target.value); }
                                    catch { newActs[idx].params = e.target.value; }
                                    setActions(newActs);
-                                 }} 
+                                 }}
                                />
                             </div>
                           )}

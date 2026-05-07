@@ -133,6 +133,15 @@ export interface TelemetrySummary {
   windowDays: number;
 }
 
+const ACTIVITY_TYPE_ZH: Record<string, string> = {
+  TASK: '任务',
+  EVENT: '事件',
+  CALL: '电话',
+  EMAIL: '邮件',
+  MEETING: '会议',
+  NOTE_LOG: '记录',
+};
+
 function toBand(payload: OppWinProbabilityPayload) {
   return {
     score: payload.score,
@@ -562,6 +571,110 @@ export class AiService {
       source: result.source === 'live' ? 'heuristic' : 'stub',
       latencyMs: Date.now() - t0,
     };
+  }
+
+  // ── Activity completion auto-summary ─────────────────────────────────────
+  // Called fire-and-forget from ActivityService.complete(). When the activity
+  // has no description, asks Claude (or heuristic) for a 1-2 sentence
+  // recap based on its type/subject + the related record's name. Writes
+  // back to activity.description in-place.
+  //
+  // Errors are swallowed: activity completion must not depend on AI success.
+
+  async writeActivityCompletionSummary(
+    tenantId: string,
+    activityId: string,
+  ): Promise<void> {
+    try {
+      const activity = await this.prisma.activity.findFirst({
+        where: { id: activityId, tenantId, deletedAt: null },
+        select: {
+          id: true, type: true, subject: true, description: true,
+          targetType: true, targetId: true, completedAt: true,
+        },
+      });
+      // Only run if there's nothing to overwrite.
+      if (!activity || (activity.description && activity.description.trim().length > 0)) return;
+
+      const targetName = await this.resolveTargetName(tenantId, activity.targetType, activity.targetId);
+      const typeZh = ACTIVITY_TYPE_ZH[activity.type] ?? activity.type;
+      const date = activity.completedAt ? activity.completedAt.toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
+
+      const system = `你是销售运营助手。销售刚完成了一个客户跟进活动，但忘了写描述。
+你的任务是根据活动元数据自动写一段 1-2 句的中文摘要，记录"做了什么"。
+不要编造未在元数据中出现的内容（具体话题、客户原话等）。
+摘要 ≤60 字，第一人称，直接陈述事实。
+仅输出摘要文本，不要 JSON、不要任何前缀。`;
+
+      const user = `活动类型：${typeZh}
+活动标题：${activity.subject}
+关联对象：${activity.targetType ?? '无'} ${targetName ?? ''}
+完成日期：${date}
+
+请写出摘要：`;
+
+      const result = await this.claude.complete<string>({
+        system,
+        user,
+        maxTokens: 200,
+        cacheSystem: false,
+      });
+
+      // Sanitize: take first 200 chars, strip any leading "摘要：" prefix.
+      let text: string;
+      if (result.source === 'live' && result.text.trim().length > 0) {
+        text = result.text.trim().replace(/^摘要[：:]\s*/, '').slice(0, 200);
+      } else {
+        text = `${date} 完成${typeZh}：${activity.subject}${targetName ? `（关联：${targetName}）` : ''}`;
+      }
+
+      await this.prisma.activity.update({
+        where: { id: activity.id },
+        data: { description: text },
+      });
+    } catch (e) {
+      this.logger.warn(`writeActivityCompletionSummary failed for ${activityId}: ${(e as Error).message}`);
+    }
+  }
+
+  private async resolveTargetName(tenantId: string, targetType: string | null, targetId: string | null): Promise<string | null> {
+    if (!targetType || !targetId) return null;
+    try {
+      switch (targetType) {
+        case 'opportunity': {
+          const r = await this.prisma.opportunity.findFirst({
+            where: { id: targetId, tenantId, deletedAt: null },
+            select: { name: true },
+          });
+          return r?.name ?? null;
+        }
+        case 'lead': {
+          const r = await this.prisma.lead.findFirst({
+            where: { id: targetId, tenantId, deletedAt: null },
+            select: { firstName: true, lastName: true, company: true },
+          });
+          if (!r) return null;
+          return [r.firstName, r.lastName].filter(Boolean).join(' ') || r.company;
+        }
+        case 'account': {
+          const r = await this.prisma.account.findFirst({
+            where: { id: targetId, tenantId, deletedAt: null },
+            select: { name: true },
+          });
+          return r?.name ?? null;
+        }
+        case 'contact': {
+          const r = await this.prisma.contact.findFirst({
+            where: { id: targetId, tenantId, deletedAt: null },
+            select: { firstName: true, lastName: true },
+          });
+          return r ? [r.firstName, r.lastName].filter(Boolean).join(' ') : null;
+        }
+        default: return null;
+      }
+    } catch {
+      return null;
+    }
   }
 
   // ── Telemetry / cost dashboard ────────────────────────────────────────────

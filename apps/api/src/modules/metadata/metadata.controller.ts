@@ -72,6 +72,19 @@ export class MetadataController {
   @RequirePermissions('admin.*')
   removeField(@TenantId() tid: string, @Param('id') id: string) { return this.svc.removeField(tid, id); }
 
+  // Generic record resolver — turns IDs into display names for REFERENCE fields
+  @Post('resolve')
+  @RequirePermissions('metadata.read')
+  resolveRecords(
+    @TenantId() tid: string,
+    @Body() body: { objectApiName: string; ids: string[] },
+  ) {
+    if (!body.objectApiName || !Array.isArray(body.ids)) {
+      return {};
+    }
+    return this.svc.resolveRecords(tid, body.objectApiName, body.ids);
+  }
+
   // Picklists
   @Get('picklists')
   @RequirePermissions('metadata.read')

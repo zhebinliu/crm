@@ -117,6 +117,114 @@ export class MetadataService {
     return { ok: true };
   }
 
+  // ── Generic ID resolver ──────────────────────────────────────────────────
+  // Used by REFERENCE field renderers to turn a list of IDs into
+  // human-readable names. Tenant-scoped. Returns { [id]: { name, secondary? } }.
+  // Only soft-deleted records are excluded; missing IDs are simply absent.
+
+  async resolveRecords(
+    tenantId: string,
+    objectApiName: string,
+    ids: string[],
+  ): Promise<Record<string, { name: string; secondary?: string }>> {
+    if (ids.length === 0) return {};
+    const out: Record<string, { name: string; secondary?: string }> = {};
+    const safeIds = ids.slice(0, 200);
+
+    switch (objectApiName) {
+      case 'Account': {
+        const rows = await this.prisma.account.findMany({
+          where: { tenantId, id: { in: safeIds }, deletedAt: null },
+          select: { id: true, name: true, industry: true },
+        });
+        for (const r of rows) out[r.id] = { name: r.name, secondary: r.industry ?? undefined };
+        break;
+      }
+      case 'Contact': {
+        const rows = await this.prisma.contact.findMany({
+          where: { tenantId, id: { in: safeIds }, deletedAt: null },
+          select: { id: true, firstName: true, lastName: true, title: true },
+        });
+        for (const r of rows) {
+          out[r.id] = {
+            name: [r.firstName, r.lastName].filter(Boolean).join(' ') || '(无名)',
+            secondary: r.title ?? undefined,
+          };
+        }
+        break;
+      }
+      case 'Lead': {
+        const rows = await this.prisma.lead.findMany({
+          where: { tenantId, id: { in: safeIds }, deletedAt: null },
+          select: { id: true, firstName: true, lastName: true, company: true },
+        });
+        for (const r of rows) {
+          const fullName = [r.firstName, r.lastName].filter(Boolean).join(' ');
+          out[r.id] = {
+            name: fullName || r.company,
+            secondary: fullName ? r.company : undefined,
+          };
+        }
+        break;
+      }
+      case 'Opportunity': {
+        const rows = await this.prisma.opportunity.findMany({
+          where: { tenantId, id: { in: safeIds }, deletedAt: null },
+          select: { id: true, name: true, stage: true },
+        });
+        for (const r of rows) out[r.id] = { name: r.name, secondary: r.stage };
+        break;
+      }
+      case 'Quote': {
+        const rows = await this.prisma.quote.findMany({
+          where: { tenantId, id: { in: safeIds }, deletedAt: null },
+          select: { id: true, quoteNumber: true, status: true },
+        });
+        for (const r of rows) out[r.id] = { name: r.quoteNumber, secondary: r.status };
+        break;
+      }
+      case 'Order': {
+        const rows = await this.prisma.order.findMany({
+          where: { tenantId, id: { in: safeIds }, deletedAt: null },
+          select: { id: true, orderNumber: true, status: true },
+        });
+        for (const r of rows) out[r.id] = { name: r.orderNumber, secondary: r.status };
+        break;
+      }
+      case 'User': {
+        const rows = await this.prisma.user.findMany({
+          where: { tenantId, id: { in: safeIds }, deletedAt: null },
+          select: { id: true, displayName: true, email: true },
+        });
+        for (const r of rows) out[r.id] = { name: r.displayName, secondary: r.email };
+        break;
+      }
+      case 'Product': {
+        const rows = await this.prisma.product.findMany({
+          where: { tenantId, id: { in: safeIds } },
+          select: { id: true, name: true, code: true },
+        });
+        for (const r of rows) out[r.id] = { name: r.name, secondary: r.code };
+        break;
+      }
+      default: {
+        // Custom object — read CustomRecord, look at data.name or data.title.
+        const rows = await this.prisma.customRecord.findMany({
+          where: { tenantId, id: { in: safeIds }, objectApiName },
+          select: { id: true, data: true },
+        });
+        for (const r of rows) {
+          const d = (r.data as Record<string, unknown>) ?? {};
+          out[r.id] = {
+            name: String(d.name ?? d.title ?? d.label ?? r.id),
+          };
+        }
+        break;
+      }
+    }
+    return out;
+  }
+
   // ── Picklists ─────────────────────────────────────────────────────────────
 
   listPicklists(tenantId: string) {

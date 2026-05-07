@@ -189,6 +189,12 @@ export const adminApi = {
   getPicklist: (apiName: string) => api.get(`/admin/metadata/picklists/${apiName}`).then((r) => r.data),
   saveLayout: (name: string, layout: unknown) => api.post(`/admin/metadata/objects/${name}/layout`, layout).then((r) => r.data),
   getLayout: (name: string) => api.get(`/admin/metadata/objects/${name}/layout`).then((r) => r.data),
+  resolveRecords: (objectApiName: string, ids: string[]) =>
+    api.post('/admin/metadata/resolve', { objectApiName, ids }).then((r) => r.data),
+  auditLog: (params?: Record<string, unknown>) =>
+    api.get('/admin/audit-log', { params }).then((r) => r.data),
+  auditLogFacets: () =>
+    api.get('/admin/audit-log/facets').then((r) => r.data),
 };
 
 export const forecastApi = {
