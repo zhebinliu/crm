@@ -104,14 +104,14 @@ export class UserService {
       });
     }
 
-    await this.prisma.user.update({ where: { id: existing.id }, data });
+    await this.prisma.user.updateMany({ where: { id: existing.id, tenantId }, data });
     return this.get(tenantId, id);
   }
 
   async softDelete(tenantId: string, id: string) {
     await this.get(tenantId, id);
-    await this.prisma.user.update({
-      where: { id },
+    await this.prisma.user.updateMany({
+      where: { id, tenantId },
       data: { deletedAt: new Date(), isActive: false },
     });
     return { ok: true };

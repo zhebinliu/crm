@@ -37,8 +37,9 @@ export class AuthService {
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) throw new UnauthorizedException({ code: 'INVALID_CREDENTIALS', message: 'Invalid credentials' });
 
-    await this.prisma.user.update({
-      where: { id: user.id },
+    // Tenant-guard requires tenantId in updates; updateMany lets us add it.
+    await this.prisma.user.updateMany({
+      where: { id: user.id, tenantId: user.tenantId },
       data: { lastLoginAt: new Date() },
     });
 

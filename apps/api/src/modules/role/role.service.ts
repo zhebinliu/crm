@@ -58,7 +58,7 @@ export class RoleService {
     const role = await this.prisma.role.findFirst({ where: { id: roleId, tenantId } });
     if (!role) throw new NotFoundException({ code: 'NOT_FOUND', message: 'Role not found' });
     if (role.isSystem) throw new BadRequestException({ code: 'CONFLICT', message: 'Cannot delete system role' });
-    await this.prisma.role.delete({ where: { id: roleId } });
+    await this.prisma.role.deleteMany({ where: { id: roleId, tenantId } });
     return { ok: true };
   }
 }
