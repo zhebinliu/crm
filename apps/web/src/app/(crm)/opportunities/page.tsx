@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { CreateRecordModal } from '@/components/dynamic/create-record-modal';
 import { FilterBar, FilterField } from '@/components/crm/filter-bar';
 import { ListViewSelector } from '@/components/crm/list-view-selector';
+import { CsvImportButton } from '@/components/crm/csv-import-button';
 import { DataTable, Column } from '@/components/crm/data-table';
 import {
   Plus, TrendingUp, LayoutList, Columns3, ChevronRight,
@@ -377,13 +378,16 @@ export default function OpportunitiesPage() {
             <span className="font-black text-ink">{openCount}</span> 条进行中
           </p>
         </div>
-        <Button
-          onClick={() => setModalOpen(true)}
-          className="rounded-xl bg-brand hover:bg-brand-deep text-white h-11 px-6 font-bold shadow-xl shadow-brand/20 gap-2"
-        >
-          <Plus size={16} />
-          新建商机
-        </Button>
+        <div className="flex items-center gap-2">
+          <CsvImportButton objectApiName="Opportunity" objectLabel="商机" invalidateKeys={['opportunities']} />
+          <Button
+            onClick={() => setModalOpen(true)}
+            className="rounded-xl bg-brand hover:bg-brand-deep text-white h-11 px-6 font-bold shadow-xl shadow-brand/20 gap-2"
+          >
+            <Plus size={16} />
+            新建商机
+          </Button>
+        </div>
       </div>
 
       {/* ── KPI strip ── */}

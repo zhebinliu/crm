@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { CreateRecordModal } from '@/components/dynamic/create-record-modal';
 import { FilterBar, FilterField } from '@/components/crm/filter-bar';
 import { ListViewSelector } from '@/components/crm/list-view-selector';
+import { CsvImportButton } from '@/components/crm/csv-import-button';
 import { DataTable, Column } from '@/components/crm/data-table';
 
 const CONTACT_FILTERS: FilterField[] = [
@@ -179,13 +180,16 @@ export default function ContactsPage() {
           </div>
           <h1 className="text-3xl font-black tracking-tight text-ink">联系人</h1>
         </div>
-        <Button
-          onClick={() => setCreateOpen(true)}
-          className="bg-brand hover:bg-brand-deep text-white rounded-xl font-bold h-10 px-5"
-        >
-          <Plus size={16} className="mr-1.5" />
-          新建联系人
-        </Button>
+        <div className="flex items-center gap-2">
+          <CsvImportButton objectApiName="Contact" objectLabel="联系人" invalidateKeys={['contacts']} />
+          <Button
+            onClick={() => setCreateOpen(true)}
+            className="bg-brand hover:bg-brand-deep text-white rounded-xl font-bold h-10 px-5"
+          >
+            <Plus size={16} className="mr-1.5" />
+            新建联系人
+          </Button>
+        </div>
       </div>
 
       <ListViewSelector
