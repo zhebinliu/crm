@@ -59,6 +59,7 @@ model Tenant {
   aiInsights          AIInsight[]
   notifications       Notification[]
   listViews           ListView[]
+  recordShares        RecordShare[]
 
   @@map("tenants")
 }
@@ -106,6 +107,7 @@ model User {
   forecastUpdateEntries ForecastUpdateEntry[] @relation("ForecastEntryUser")
   notifications         Notification[]
   listViews             ListView[]
+  recordShares          RecordShare[]      @relation("RecordShareUser")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -120,6 +122,11 @@ model Role {
   code        String // e.g. "admin", "sales_manager", "sales_rep"
   description String?
   isSystem    Boolean  @default(false)
+  // Salesforce-style role hierarchy. A user with a parent role implicitly
+  // sees records owned by users in any descendant role. Null = root role.
+  parentId    String?
+  parent      Role?    @relation("RoleParent", fields: [parentId], references: [id], onDelete: SetNull)
+  children    Role[]   @relation("RoleParent")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -128,7 +135,41 @@ model Role {
 
   @@unique([tenantId, code])
   @@index([tenantId])
+  @@index([tenantId, parentId])
   @@map("roles")
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// RECORD-LEVEL SHARING
+// Salesforce-style explicit shares. A row says: "User X (or Role Y, or
+// Group G — only User in v1) has <accessLevel> on <recordType>:<recordId>".
+// Combined with role hierarchy + ownerId, gives "who can see what".
+// ────────────────────────────────────────────────────────────────────────────
+
+enum ShareAccessLevel {
+  READ
+  EDIT
+}
+
+model RecordShare {
+  id           String           @id @default(cuid())
+  tenantId     String
+  tenant       Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  recordType   String           // "lead" | "account" | "opportunity" | ...
+  recordId     String
+  // User this row grants access to
+  userId       String
+  user         User             @relation("RecordShareUser", fields: [userId], references: [id], onDelete: Cascade)
+  accessLevel  ShareAccessLevel @default(READ)
+  // "manual" | "rule:<ruleId>" | "team" — provenance of this share
+  reason       String           @default("manual")
+  createdAt    DateTime         @default(now())
+  createdById  String?
+
+  @@unique([tenantId, recordType, recordId, userId])
+  @@index([tenantId, userId, recordType])
+  @@index([tenantId, recordType, recordId])
+  @@map("record_shares")
 }
 
 model Permission {
