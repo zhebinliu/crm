@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { CreateRecordModal } from '@/components/dynamic/create-record-modal';
 import { FilterBar, FilterField } from '@/components/crm/filter-bar';
+import { ListViewSelector } from '@/components/crm/list-view-selector';
 import { DataTable, Column } from '@/components/crm/data-table';
 
 const ACCOUNT_FILTERS: FilterField[] = [
@@ -141,6 +142,12 @@ export default function AccountsPage() {
           新建客户
         </Button>
       </div>
+
+      <ListViewSelector
+        objectApiName="Account"
+        filters={filters}
+        onApply={setFilters}
+      />
 
       {/* Filter Bar */}
       <FilterBar

@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { CreateRecordModal } from '@/components/dynamic/create-record-modal';
 import { FilterBar, FilterField } from '@/components/crm/filter-bar';
+import { ListViewSelector } from '@/components/crm/list-view-selector';
 import { Plus, Users } from 'lucide-react';
 import { DataTable, Column } from '@/components/crm/data-table';
 
@@ -206,6 +207,13 @@ export default function LeadsPage() {
           新建线索
         </Button>
       </div>
+
+      {/* Saved views */}
+      <ListViewSelector
+        objectApiName="Lead"
+        filters={filters}
+        onApply={setFilters}
+      />
 
       {/* Filter Bar */}
       <FilterBar

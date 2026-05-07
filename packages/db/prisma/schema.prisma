@@ -58,6 +58,7 @@ model Tenant {
   forecastUpdateTasks ForecastUpdateTask[]
   aiInsights          AIInsight[]
   notifications       Notification[]
+  listViews           ListView[]
 
   @@map("tenants")
 }
@@ -104,6 +105,7 @@ model User {
   createdForecastTasks  ForecastUpdateTask[]  @relation("ForecastTaskCreator")
   forecastUpdateEntries ForecastUpdateEntry[] @relation("ForecastEntryUser")
   notifications         Notification[]
+  listViews             ListView[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -1229,6 +1231,39 @@ model SequenceCounter {
 
   @@unique([tenantId, key])
   @@map("sequence_counters")
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// SAVED LIST VIEWS
+// ────────────────────────────────────────────────────────────────────────────
+// Per-user saved filter+sort presets for any object's list page. Owners can
+// also share a view (isShared=true) so the whole tenant sees it.
+// ════════════════════════════════════════════════════════════════════════════
+
+model ListView {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ownerId       String
+  owner         User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  // "Lead" | "Opportunity" | "Account" | "Contact" | "<custom>__c"
+  objectApiName String
+  name          String
+  filters       Json     @default("{}")
+  sortBy        String?
+  sortDir       String?  // "asc" | "desc"
+  // Visible to whole tenant when true
+  isShared      Boolean  @default(false)
+  // The user's default view for this object — at most one per (user, object)
+  isDefault     Boolean  @default(false)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([tenantId, objectApiName])
+  @@index([tenantId, ownerId, objectApiName])
+  @@map("list_views")
 }
 
 // ════════════════════════════════════════════════════════════════════════════

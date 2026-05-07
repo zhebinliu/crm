@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { CreateRecordModal } from '@/components/dynamic/create-record-modal';
 import { FilterBar, FilterField } from '@/components/crm/filter-bar';
+import { ListViewSelector } from '@/components/crm/list-view-selector';
 import { DataTable, Column } from '@/components/crm/data-table';
 import {
   Plus, TrendingUp, LayoutList, Columns3, ChevronRight,
@@ -415,6 +416,12 @@ export default function OpportunitiesPage() {
           </div>
         </div>
       </div>
+
+      <ListViewSelector
+        objectApiName="Opportunity"
+        filters={filters}
+        onApply={setFilters}
+      />
 
       {/* ── Filter Bar ── */}
       <FilterBar
