@@ -206,7 +206,11 @@ export class LeadController {
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @RequirePermissions('lead.delete')
-  softDelete(@TenantId() tenantId: string, @Param('id') id: string) {
-    return this.leadService.softDelete(tenantId, id);
+  softDelete(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.leadService.softDelete(tenantId, id, user);
   }
 }

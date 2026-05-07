@@ -64,6 +64,7 @@ model Tenant {
   campaigns           Campaign[]
   campaignMembers     CampaignMember[]
   persons             Person[]
+  recycleBinEntries   RecycleBinEntry[]
 
   @@map("tenants")
 }
@@ -1786,4 +1787,27 @@ model WebhookInboundEvent {
   @@unique([tenantId, endpointId, idempotencyKey])
   @@index([tenantId, processedAt, createdAt])
   @@map("webhook_inbound_events")
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// RECYCLE BIN — SF-style undelete with 30-day retention (Wave 16b)
+// ════════════════════════════════════════════════════════════════════════════
+
+model RecycleBinEntry {
+  id          String    @id @default(cuid())
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  recordType  String // "lead" | "account" | "contact" | "opportunity" | "quote" | "order" | "contract" | "activity" | "case"
+  recordId    String
+  deletedAt   DateTime  @default(now())
+  deletedById String?
+  // 30 days from deletedAt — column kept for index efficiency
+  purgeAfter  DateTime
+  // Snapshot for display in the recycle bin UI ("12 件已删除：测试线索 (李明) ...")
+  snapshot    Json      @default("{}")
+  restoredAt  DateTime?
+
+  @@index([tenantId, restoredAt, purgeAfter])
+  @@index([tenantId, recordType])
+  @@map("recycle_bin_entries")
 }

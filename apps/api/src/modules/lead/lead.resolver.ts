@@ -71,7 +71,7 @@ export class LeadResolver {
     @GqlCurrentUser() user: RequestUser,
     @Args('id', { type: () => ID }) id: string,
   ) {
-    await this.leads.softDelete(user.tenantId, id);
+    await this.leads.softDelete(user.tenantId, id, user);
     return true;
   }
 

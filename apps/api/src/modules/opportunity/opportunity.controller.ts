@@ -120,8 +120,12 @@ export class OpportunityController {
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @RequirePermissions('opportunity.delete')
-  softDelete(@TenantId() tenantId: string, @Param('id') id: string) {
-    return this.service.softDelete(tenantId, id);
+  softDelete(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.service.softDelete(tenantId, id, user);
   }
 
   @Post(':id/line-items')

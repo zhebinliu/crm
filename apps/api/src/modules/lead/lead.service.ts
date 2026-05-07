@@ -10,6 +10,7 @@ import { IdentityResolutionService } from '../person/identity-resolution.service
 import { EVENTS } from '@tokenwave/shared';
 import { FlsService } from '../fls/fls.service';
 import type { RequestUser } from '../../common/types/request-context';
+import { RecycleBinService } from '../recycle-bin/recycle-bin.service';
 
 export interface LeadListOptions {
   search?: string;
@@ -37,10 +38,11 @@ export class LeadService extends BaseEntityService {
     audit: AuditService,
     emitter: EventEmitter2,
     outbox: OutboxService,
+    recycleBin: RecycleBinService,
     private readonly identity: IdentityResolutionService,
     private readonly fls: FlsService,
   ) {
-    super(workflow, validation, audit, emitter, outbox);
+    super(workflow, validation, audit, emitter, outbox, recycleBin);
   }
 
   async list(tenantId: string, opts: LeadListOptions = {}, user?: RequestUser) {
@@ -203,11 +205,13 @@ export class LeadService extends BaseEntityService {
     return result;
   }
 
-  async softDelete(tenantId: string, id: string) {
-    await this.get(tenantId, id);
-    return this.prisma.lead.update({
+  async softDelete(tenantId: string, id: string, user?: RequestUser) {
+    const previous = await this.get(tenantId, id);
+    const lead = await this.prisma.lead.update({
       where: { id },
       data: { deletedAt: new Date() } as any,
     });
+    await this.afterSoftDelete(tenantId, 'lead', previous as Record<string, unknown>, user);
+    return lead;
   }
 }
