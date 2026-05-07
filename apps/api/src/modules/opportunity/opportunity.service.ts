@@ -192,6 +192,43 @@ export class OpportunityService extends BaseEntityService {
     return this.recalculateAmount(oppId);
   }
 
+  /**
+   * Update an existing line item — quantity / unitPrice / discount / description.
+   * Recomputes subtotal and re-rolls up Opp.amount. Closes the audit gap
+   * "Roll-up summary not triggered on line-item edit".
+   */
+  async updateLineItem(
+    tenantId: string,
+    oppId: string,
+    lineItemId: string,
+    patch: Partial<{ quantity: number; unitPrice: number; discount: number; description: string }>,
+  ) {
+    await this.get(tenantId, oppId);
+
+    const existing = await this.prisma.opportunityLineItem.findFirst({
+      where: { id: lineItemId, opportunityId: oppId },
+    });
+    if (!existing) throw new NotFoundException(`LineItem ${lineItemId} not found on opp ${oppId}`);
+
+    const qty = new Decimal(patch.quantity ?? Number(existing.quantity));
+    const price = new Decimal(patch.unitPrice ?? Number(existing.unitPrice));
+    const disc = new Decimal(patch.discount ?? Number(existing.discount));
+    const subtotal = qty.mul(price).mul(new Decimal(1).minus(disc.div(100)));
+
+    await this.prisma.opportunityLineItem.update({
+      where: { id: lineItemId },
+      data: {
+        quantity: qty,
+        unitPrice: price,
+        discount: disc,
+        subtotal,
+        ...(patch.description !== undefined ? { description: patch.description } : {}),
+      },
+    });
+
+    return this.recalculateAmount(oppId);
+  }
+
   async softDelete(tenantId: string, id: string) {
     await this.get(tenantId, id);
     await this.prisma.opportunity.update({

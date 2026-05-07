@@ -5,6 +5,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { WorkflowService } from '../workflow/workflow.service';
 import { ValidationRuleService } from '../workflow/validation-rule.service';
 import { AuditService } from '../workflow/audit.service';
+import { FormulaService } from '../formula/formula.service';
 import type { RequestUser } from '../../common/types/request-context';
 
 @Injectable()
@@ -15,6 +16,7 @@ export class RecordService {
     private readonly workflow: WorkflowService,
     private readonly validation: ValidationRuleService,
     private readonly audit: AuditService,
+    private readonly formula: FormulaService,
   ) {}
 
   private getStandardDelegate(objectApiName: string) {
@@ -88,24 +90,28 @@ export class RecordService {
 
   async listRecords(tenantId: string, objectApiName: string, query: any) {
     const delegate = this.getStandardDelegate(objectApiName);
+    let records: any[];
     if (delegate) {
-      return delegate.findMany({ 
+      records = await delegate.findMany({
         where: { tenantId, deletedAt: null },
-        orderBy: { createdAt: 'desc' }
+        orderBy: { createdAt: 'desc' },
       });
+    } else {
+      // Custom Object
+      const rows = await this.prisma.customRecord.findMany({
+        where: { tenantId, objectApiName: objectApiName.toLowerCase() },
+        orderBy: { createdAt: 'desc' },
+      });
+      records = rows.map((r) => ({ id: r.id, ...((r.data as any) || {}) }));
     }
-
-    // Custom Object
-    const records = await this.prisma.customRecord.findMany({
-      where: { tenantId, objectApiName: objectApiName.toLowerCase() },
-      orderBy: { createdAt: 'desc' }
-    });
-    return records.map(r => ({ id: r.id, ...((r.data as any) || {}) }));
+    // Decorate with computed FORMULA-field values (P2b)
+    await this.formula.decorateRecords(tenantId, objectApiName, records);
+    return records;
   }
 
   async getRecord(tenantId: string, objectApiName: string, id: string) {
     const delegate = this.getStandardDelegate(objectApiName);
-    let record;
+    let record: any;
     if (delegate) {
       record = await delegate.findUnique({ where: { id, tenantId } });
     } else {
@@ -114,8 +120,10 @@ export class RecordService {
         record = { id: cr.id, ...((cr.data as any) || {}) };
       }
     }
-    
+
     if (!record) throw new NotFoundException(`Record not found`);
+    // Decorate with computed FORMULA-field values (P2b)
+    await this.formula.decorateRecord(tenantId, objectApiName, record);
     return record;
   }
 

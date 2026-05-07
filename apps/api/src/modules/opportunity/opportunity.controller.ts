@@ -134,6 +134,17 @@ export class OpportunityController {
     return this.service.addLineItem(tenantId, id, body);
   }
 
+  @Put(':id/line-items/:lineItemId')
+  @RequirePermissions('opportunity.write')
+  updateLineItem(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @Param('lineItemId') lineItemId: string,
+    @Body() body: Partial<AddLineItemDto>,
+  ) {
+    return this.service.updateLineItem(tenantId, id, lineItemId, body);
+  }
+
   @Delete(':id/line-items/:lineItemId')
   @HttpCode(HttpStatus.NO_CONTENT)
   @RequirePermissions('opportunity.write')

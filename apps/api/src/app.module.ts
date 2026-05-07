@@ -1,5 +1,6 @@
-import { Module } from '@nestjs/common';
+import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { IdempotencyMiddleware } from './common/idempotency.middleware';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
 import { BullModule } from '@nestjs/bullmq';
@@ -35,6 +36,11 @@ import { AiModule } from './modules/ai/ai.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { ListViewModule } from './modules/list-view/list-view.module';
 import { ImportModule } from './modules/import/import.module';
+import { SharingModule } from './modules/sharing/sharing.module';
+import { CaseModule } from './modules/case/case.module';
+import { CampaignModule } from './modules/campaign/campaign.module';
+import { BulkModule } from './modules/bulk/bulk.module';
+import { FormulaModule } from './modules/formula/formula.module';
 
 import { HealthController } from './health.controller';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
@@ -92,6 +98,11 @@ import { PermissionsGuard } from './common/guards/permissions.guard';
     NotificationModule,
     ListViewModule,
     ImportModule,
+    SharingModule,
+    CaseModule,
+    CampaignModule,
+    BulkModule,
+    FormulaModule,
   ],
   controllers: [HealthController],
   providers: [
@@ -99,4 +110,8 @@ import { PermissionsGuard } from './common/guards/permissions.guard';
     { provide: APP_GUARD, useClass: PermissionsGuard },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(IdempotencyMiddleware).forRoutes('*');
+  }
+}

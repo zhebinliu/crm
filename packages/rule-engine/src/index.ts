@@ -3,3 +3,4 @@ export * from './evaluator';
 export * from './actions';
 export * from './schema';
 export * from './path';
+export * from './formula';

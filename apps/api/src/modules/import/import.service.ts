@@ -11,6 +11,7 @@ import { LeadService } from '../lead/lead.service';
 import { AccountService } from '../account/account.service';
 import { ContactService } from '../contact/contact.service';
 import { OpportunityService } from '../opportunity/opportunity.service';
+import { AuditService } from '../workflow/audit.service';
 import type { RequestUser } from '../../common/types/request-context';
 import { parseCsv } from './csv.parser';
 
@@ -97,6 +98,7 @@ export class ImportService {
     private readonly accounts: AccountService,
     private readonly contacts: ContactService,
     private readonly opps: OpportunityService,
+    private readonly audit: AuditService,
   ) {}
 
   async importCsv(
@@ -212,6 +214,33 @@ export class ImportService {
     this.log.log(
       `import ${objectApiName} by ${user.id}: ${result.created} ok / ${result.failed} fail / ${result.total} total`,
     );
+
+    // Summary audit entry per import session, in addition to the per-record
+    // audit entries that the underlying service.create() calls already emit.
+    try {
+      await this.audit.log({
+        tenantId,
+        actorId: user.id,
+        action: 'import_csv',
+        recordType: objectApiName,
+        recordId: `import_${Date.now()}`,
+        changes: {
+          summary: {
+            from: null,
+            to: {
+              total: result.total,
+              created: result.created,
+              failed: result.failed,
+              recognizedHeaders,
+              ignoredHeaders,
+            },
+          },
+        },
+      });
+    } catch (e) {
+      this.log.warn(`audit.log failed for import session: ${(e as Error).message}`);
+    }
+
     return result;
   }
 

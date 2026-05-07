@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AuditService } from './audit.service';
 
 /**
  * Maps object api names to Prisma model delegates, and provides a single
@@ -12,7 +13,10 @@ import { PrismaService } from '../../prisma/prisma.service';
 export class RecordMutatorService {
   private readonly log = new Logger(RecordMutatorService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   /** Lookup a Prisma delegate by object api name. */
   private delegate(objectApiName: string): { findFirst: Function; update: Function } | null {
@@ -42,6 +46,7 @@ export class RecordMutatorService {
     tenantId: string,
     id: string,
     fields: Record<string, unknown>,
+    options?: { actorId?: string | null; reason?: string },
   ): Promise<Record<string, unknown> | null> {
     const d = this.delegate(objectApiName);
     if (!d) {
@@ -59,12 +64,34 @@ export class RecordMutatorService {
       }
     }
     const data: Record<string, unknown> = { ...standard };
+    let previous: Record<string, unknown> | null = null;
     if (Object.keys(custom).length > 0) {
       // merge into existing customFields JSON
-      const existing = await this.findById(objectApiName, tenantId, id);
-      const cur = (existing?.customFields as Record<string, unknown>) ?? {};
+      previous = await this.findById(objectApiName, tenantId, id);
+      const cur = (previous?.customFields as Record<string, unknown>) ?? {};
       data.customFields = { ...cur, ...custom };
+    } else {
+      // Audit needs the before-snapshot for diff
+      previous = await this.findById(objectApiName, tenantId, id);
     }
-    return d.update({ where: { id }, data });
+    const updated = await d.update({ where: { id }, data });
+    // Audit the workflow-driven mutation. Without this entry the audit log
+    // misses any record changes triggered by workflow rules.
+    try {
+      const changes = previous
+        ? this.audit.diff(previous, updated as Record<string, unknown>)
+        : Object.fromEntries(Object.keys(fields).map((k) => [k, { from: null, to: fields[k] }]));
+      await this.audit.log({
+        tenantId,
+        actorId: options?.actorId ?? undefined,
+        action: options?.reason ?? 'workflow_field_update',
+        recordType: objectApiName,
+        recordId: id,
+        changes,
+      });
+    } catch (e) {
+      this.log.warn(`audit.log failed for ${objectApiName}/${id}: ${(e as Error).message}`);
+    }
+    return updated;
   }
 }

@@ -4,9 +4,10 @@ import { RecordService } from './record.service';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { WorkflowModule } from '../workflow/workflow.module';
 import { ContractModule } from '../contract/contract.module';
+import { FormulaModule } from '../formula/formula.module';
 
 @Module({
-  imports: [PrismaModule, WorkflowModule, ContractModule],
+  imports: [PrismaModule, WorkflowModule, ContractModule, FormulaModule],
   controllers: [RecordController],
   providers: [RecordService],
   exports: [RecordService],

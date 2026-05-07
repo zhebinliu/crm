@@ -59,6 +59,10 @@ model Tenant {
   aiInsights          AIInsight[]
   notifications       Notification[]
   listViews           ListView[]
+  recordShares        RecordShare[]
+  cases               Case[]
+  campaigns           Campaign[]
+  campaignMembers     CampaignMember[]
 
   @@map("tenants")
 }
@@ -106,6 +110,9 @@ model User {
   forecastUpdateEntries ForecastUpdateEntry[] @relation("ForecastEntryUser")
   notifications         Notification[]
   listViews             ListView[]
+  recordShares          RecordShare[]      @relation("RecordShareUser")
+  ownedCases            Case[]             @relation("CaseOwner")
+  ownedCampaigns        Campaign[]         @relation("CampaignOwner")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -120,6 +127,11 @@ model Role {
   code        String // e.g. "admin", "sales_manager", "sales_rep"
   description String?
   isSystem    Boolean  @default(false)
+  // Salesforce-style role hierarchy. A user with a parent role implicitly
+  // sees records owned by users in any descendant role. Null = root role.
+  parentId    String?
+  parent      Role?    @relation("RoleParent", fields: [parentId], references: [id], onDelete: SetNull)
+  children    Role[]   @relation("RoleParent")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -128,7 +140,41 @@ model Role {
 
   @@unique([tenantId, code])
   @@index([tenantId])
+  @@index([tenantId, parentId])
   @@map("roles")
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// RECORD-LEVEL SHARING
+// Salesforce-style explicit shares. A row says: "User X (or Role Y, or
+// Group G — only User in v1) has <accessLevel> on <recordType>:<recordId>".
+// Combined with role hierarchy + ownerId, gives "who can see what".
+// ────────────────────────────────────────────────────────────────────────────
+
+enum ShareAccessLevel {
+  READ
+  EDIT
+}
+
+model RecordShare {
+  id           String           @id @default(cuid())
+  tenantId     String
+  tenant       Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  recordType   String           // "lead" | "account" | "opportunity" | ...
+  recordId     String
+  // User this row grants access to
+  userId       String
+  user         User             @relation("RecordShareUser", fields: [userId], references: [id], onDelete: Cascade)
+  accessLevel  ShareAccessLevel @default(READ)
+  // "manual" | "rule:<ruleId>" | "team" — provenance of this share
+  reason       String           @default("manual")
+  createdAt    DateTime         @default(now())
+  createdById  String?
+
+  @@unique([tenantId, recordType, recordId, userId])
+  @@index([tenantId, userId, recordType])
+  @@index([tenantId, recordType, recordId])
+  @@map("record_shares")
 }
 
 model Permission {
@@ -354,6 +400,8 @@ model Lead {
   convertedContactId String?
   convertedOppId     String?
 
+  campaignMembers    CampaignMember[]
+
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   createdById String?
@@ -405,6 +453,7 @@ model Account {
   quotes        Quote[]
   orders        Order[]
   contracts     Contract[]
+  cases         Case[]
 
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -446,6 +495,9 @@ model Contact {
   mailingState      String?
   mailingPostalCode String?
   mailingCountry    String?
+
+  cases             Case[]
+  campaignMembers   CampaignMember[]
 
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -928,6 +980,180 @@ model Attachment {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// SERVICE CLOUD — CASES
+// Customer support tickets. Polymorphic-targetable (can hang off an Account
+// or Contact). Status moves new → working → escalated → closed. Priority
+// drives queue triage. Source tracks origin (email/phone/portal/api).
+// ════════════════════════════════════════════════════════════════════════════
+
+enum CaseStatus {
+  NEW
+  WORKING
+  ESCALATED
+  WAITING_ON_CUSTOMER
+  CLOSED_RESOLVED
+  CLOSED_NOT_RESOLVED
+}
+
+enum CasePriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+model Case {
+  id           String       @id @default(cuid())
+  tenantId     String
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  caseNumber   String       // human-readable (e.g. "CASE-0042")
+  subject      String
+  description  String?      @db.Text
+  status       CaseStatus   @default(NEW)
+  priority     CasePriority @default(NORMAL)
+  // origin: "email" | "phone" | "web" | "portal" | "api" | "chat"
+  source       String       @default("web")
+  // SLA fields (could be enriched from a future SLA policy table).
+  slaTargetAt  DateTime?
+  firstResponseAt DateTime?
+  resolvedAt   DateTime?
+
+  ownerId      String
+  owner        User         @relation("CaseOwner", fields: [ownerId], references: [id])
+  // Polymorphic-ish relations to standard CRM objects
+  accountId    String?
+  account      Account?     @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  contactId    String?
+  contact      Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  customFields Json         @default("{}")
+
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  createdById  String?
+  updatedById  String?
+  deletedAt    DateTime?
+
+  comments     CaseComment[]
+
+  @@unique([tenantId, caseNumber])
+  @@index([tenantId, status])
+  @@index([tenantId, ownerId])
+  @@index([tenantId, accountId])
+  @@index([tenantId, priority, status])
+  @@map("cases")
+}
+
+model CaseComment {
+  id         String   @id @default(cuid())
+  tenantId   String
+  caseId     String
+  case       Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  authorId   String
+  body       String   @db.Text
+  // Internal notes are visible to staff only; public comments may surface
+  // to the customer portal.
+  isPublic   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId, caseId])
+  @@map("case_comments")
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// MARKETING CLOUD — CAMPAIGNS
+// A campaign is a marketing activity (event, email blast, ad). Members are
+// Leads/Contacts engaged with it. status tracks their journey (sent → opened
+// → responded → converted).
+// ════════════════════════════════════════════════════════════════════════════
+
+enum CampaignStatus {
+  PLANNED
+  ACTIVE
+  COMPLETED
+  ABORTED
+}
+
+enum CampaignType {
+  EMAIL
+  EVENT
+  WEBINAR
+  AD
+  REFERRAL
+  CONTENT
+  OTHER
+}
+
+model Campaign {
+  id              String           @id @default(cuid())
+  tenantId        String
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ownerId         String
+  owner           User             @relation("CampaignOwner", fields: [ownerId], references: [id])
+
+  name            String
+  type            CampaignType     @default(EMAIL)
+  status          CampaignStatus   @default(PLANNED)
+  startDate       DateTime?
+  endDate         DateTime?
+  // Budget tracking
+  budgetedCost    Decimal?         @db.Decimal(18, 2)
+  actualCost      Decimal?         @db.Decimal(18, 2)
+  expectedRevenue Decimal?         @db.Decimal(18, 2)
+  // Aggregates auto-recalculated from CampaignMember
+  numSent         Int              @default(0)
+  numResponses    Int              @default(0)
+  numConverted    Int              @default(0)
+  description     String?          @db.Text
+  customFields    Json             @default("{}")
+
+  members         CampaignMember[]
+
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  deletedAt       DateTime?
+
+  @@index([tenantId, status])
+  @@index([tenantId, ownerId])
+  @@map("campaigns")
+}
+
+enum CampaignMemberStatus {
+  SENT
+  RECEIVED
+  OPENED
+  CLICKED
+  RESPONDED
+  CONVERTED
+  UNSUBSCRIBED
+  BOUNCED
+}
+
+model CampaignMember {
+  id           String                @id @default(cuid())
+  tenantId     String
+  tenant       Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campaignId   String
+  campaign     Campaign              @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  // Either a Lead or a Contact (one must be set). Standard SF-style attribution.
+  leadId       String?
+  lead         Lead?                 @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  contactId    String?
+  contact      Contact?              @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  status       CampaignMemberStatus  @default(SENT)
+  respondedAt  DateTime?
+
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+
+  @@unique([tenantId, campaignId, leadId, contactId])
+  @@index([tenantId, campaignId, status])
+  @@index([tenantId, leadId])
+  @@index([tenantId, contactId])
+  @@map("campaign_members")
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // EMAIL TEMPLATES
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -1375,4 +1601,32 @@ model CustomRecord {
   @@index([tenantId, objectApiName])
   @@index([tenantId, ownerId])
   @@map("custom_records")
+}
+
+// ── Outbound webhook dead-letter queue ──────────────────────────────────────
+// When SendWebhookAction exhausts its retry budget, the request is parked here
+// for later inspection/replay by an operator. resolvedAt != null means a human
+// (or replay job) has handled it.
+model WebhookDeadLetter {
+  id             String   @id @default(cuid())
+  tenantId       String
+  url            String
+  method         String   @default("POST")
+  headers        Json     @default("{}")
+  body           String // raw JSON body that was attempted
+  attempts       Int      @default(0)
+  lastStatus     Int?
+  lastError      String?
+  idempotencyKey String
+  workflowId     String? // optional: which workflow rule emitted this
+  recordType     String?
+  recordId       String?
+  resolvedAt     DateTime?
+  resolvedNote   String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([tenantId, resolvedAt, createdAt])
+  @@index([tenantId, idempotencyKey])
+  @@map("webhook_dead_letters")
 }

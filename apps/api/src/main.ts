@@ -13,6 +13,19 @@ async function bootstrap() {
   const config = app.get(ConfigService);
 
   app.setGlobalPrefix('api', { exclude: ['health', 'graphql'] });
+
+  // API versioning alias: route /api/v1/* → /api/* internally so external
+  // integrations can pin a version. Existing unversioned URLs keep working
+  // for backward compatibility (web app, AI Copilot built-in tools). When
+  // we add v2 endpoints later, they'll get @Version('2') and be reachable
+  // at /api/v2/* without affecting v1.
+  const expressApp = app.getHttpAdapter().getInstance() as { use: (fn: (req: { url: string }, res: unknown, next: () => void) => void) => void };
+  expressApp.use((req, _res, next) => {
+    if (req.url.startsWith('/api/v1/')) {
+      req.url = '/api/' + req.url.slice('/api/v1/'.length);
+    }
+    next();
+  });
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: false,

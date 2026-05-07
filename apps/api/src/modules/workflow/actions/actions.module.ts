@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ActionRegistry } from '@tokenwave/rule-engine';
 import { RecordMutatorService } from '../record-mutator.service';
+import { AuditService } from '../audit.service';
 import { FieldUpdateAction } from './executors/field-update.action';
 import { CreateTaskAction } from './executors/create-task.action';
 import { SendWebhookAction } from './executors/send-webhook.action';
@@ -16,6 +17,7 @@ export const ACTION_REGISTRY = Symbol('ACTION_REGISTRY');
 @Module({
   imports: [AiModule],
   providers: [
+    AuditService,
     RecordMutatorService,
     FieldUpdateAction,
     CreateTaskAction,

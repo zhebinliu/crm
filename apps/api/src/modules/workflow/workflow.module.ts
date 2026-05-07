@@ -12,6 +12,7 @@ import { RecordMutatorService } from './record-mutator.service';
 import { ActionsModule } from './actions/actions.module';
 import { AuditService } from './audit.service';
 import { AuditLogController } from './audit-log.controller';
+import { WebhookDlqController } from './webhook-dlq.controller';
 
 @Module({
   imports: [
@@ -28,7 +29,7 @@ import { AuditLogController } from './audit-log.controller';
     WorkflowRuleResolver,
     ValidationRuleResolver,
   ],
-  controllers: [WorkflowController, ValidationRuleController, AuditLogController],
+  controllers: [WorkflowController, ValidationRuleController, AuditLogController, WebhookDlqController],
   exports: [WorkflowService, ValidationRuleService, AuditService, RecordMutatorService],
 })
 export class WorkflowModule {}

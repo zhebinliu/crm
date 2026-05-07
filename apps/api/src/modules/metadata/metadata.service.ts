@@ -1,10 +1,14 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { FieldType } from '@prisma/client';
+import { FormulaService } from '../formula/formula.service';
 
 @Injectable()
 export class MetadataService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly formula: FormulaService,
+  ) {}
 
   // ── Objects ───────────────────────────────────────────────────────────────
 
@@ -131,7 +135,7 @@ export class MetadataService {
     const { picklistInline: _ignore, ...fieldData } = data;
     void _ignore;
 
-    return this.prisma.fieldDef.create({
+    const created = await this.prisma.fieldDef.create({
       data: {
         tenantId,
         objectId: obj.id,
@@ -141,26 +145,41 @@ export class MetadataService {
         isCustom: true,
       },
     });
+    // Invalidate the formula-fields cache so newly added FORMULA fields show up.
+    if (data.type === 'FORMULA') this.formula.invalidate(tenantId, objectApiName);
+    return created;
   }
 
   async updateField(tenantId: string, fieldId: string, data: Partial<Parameters<typeof this.createField>[2]>) {
-    const existing = await this.prisma.fieldDef.findFirst({ where: { id: fieldId, tenantId } });
+    const existing = await this.prisma.fieldDef.findFirst({
+      where: { id: fieldId, tenantId },
+      include: { object: { select: { apiName: true } } },
+    });
     if (!existing) throw new NotFoundException({ code: 'NOT_FOUND', message: 'Field not found' });
     // apiName + type are immutable to preserve stored data integrity.
     // picklistInline is only valid on create.
     const { apiName: _ignoreApi, type: _ignoreType, picklistInline: _ignoreInline, ...patch } = data;
     void _ignoreApi; void _ignoreType; void _ignoreInline;
-    return this.prisma.fieldDef.update({
+    const updated = await this.prisma.fieldDef.update({
       where: { id: fieldId },
       data: { ...patch, defaultValue: patch.defaultValue as object | undefined },
     });
+    // Invalidate the formula-fields cache when the formula expression changes.
+    if (existing.type === 'FORMULA' && 'formulaExpr' in patch) {
+      this.formula.invalidate(tenantId, existing.object.apiName);
+    }
+    return updated;
   }
 
   async removeField(tenantId: string, fieldId: string) {
-    const f = await this.prisma.fieldDef.findFirst({ where: { id: fieldId, tenantId } });
+    const f = await this.prisma.fieldDef.findFirst({
+      where: { id: fieldId, tenantId },
+      include: { object: { select: { apiName: true } } },
+    });
     if (!f) throw new NotFoundException({ code: 'NOT_FOUND', message: 'Field not found' });
     if (f.isStandard) throw new BadRequestException({ code: 'CONFLICT', message: 'Cannot delete standard field' });
     await this.prisma.fieldDef.delete({ where: { id: fieldId } });
+    if (f.type === 'FORMULA') this.formula.invalidate(tenantId, f.object.apiName);
     return { ok: true };
   }
 
