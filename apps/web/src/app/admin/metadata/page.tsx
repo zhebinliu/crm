@@ -1,4 +1,5 @@
 'use client';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { adminApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -7,6 +8,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { CreateObjectModal } from './create-object-modal';
 
 interface ObjectDef {
   id: string;
@@ -19,6 +21,7 @@ interface ObjectDef {
 }
 
 export default function AdminMetadataPage() {
+  const [createOpen, setCreateOpen] = useState(false);
   const { data, isLoading } = useQuery({
     queryKey: ['admin-objects'],
     queryFn: () => adminApi.listObjects(),
@@ -41,10 +44,15 @@ export default function AdminMetadataPage() {
             <p className="text-sm text-ink-secondary mt-1">管理底层模型、字段属性以及系统元数据架构。</p>
           </div>
         </div>
-        <Button className="bg-brand hover:bg-brand-deep text-white shadow-lg shadow-brand/20 h-11 px-6 font-bold rounded-xl" disabled>
+        <Button
+          className="bg-brand hover:bg-brand-deep text-white shadow-lg shadow-brand/20 h-11 px-6 font-bold rounded-xl"
+          onClick={() => setCreateOpen(true)}
+        >
           <Plus className="mr-2 h-4 w-4" /> 创建自定义对象
         </Button>
       </div>
+
+      <CreateObjectModal open={createOpen} onClose={() => setCreateOpen(false)} />
 
       {isLoading && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

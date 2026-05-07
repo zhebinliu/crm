@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { accountsApi, contactsApi } from '@/lib/api';
 import { ActivityTimeline } from '@/components/crm/activity-timeline';
 import { AccountBriefingCard } from '@/components/ai/account-briefing-card';
+import { CustomFieldsCard } from '@/components/dynamic/custom-fields-card';
 import { fmtDate, fmtMoney, cn } from '@/lib/utils';
 import {
   ArrowLeft, Building2, Phone, Globe, MapPin,
@@ -441,6 +442,13 @@ export default function AccountDetailPage() {
                 </CardContent>
               </Card>
             )}
+
+            <CustomFieldsCard
+              objectApiName="Account"
+              customFields={(account as unknown as { customFields?: Record<string, unknown> | null }).customFields ?? null}
+              saveFn={(patch) => accountsApi.update(id, patch)}
+              onSaved={() => qc.invalidateQueries({ queryKey: ['account', id] })}
+            />
           </div>
         </TabsContent>
 

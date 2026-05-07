@@ -8,6 +8,7 @@ import { oppsApi, quotesApi, productsApi } from '@/lib/api';
 import { ActivityTimeline } from '@/components/crm/activity-timeline';
 import { OppWinProbabilityCard } from '@/components/ai/opp-win-probability-card';
 import { OppActivitySummaryCard } from '@/components/ai/opp-activity-summary-card';
+import { CustomFieldsCard } from '@/components/dynamic/custom-fields-card';
 import { fmtDate, fmtMoney, stageColor, cn } from '@/lib/utils';
 import {
   Card, CardContent, CardHeader, CardTitle,
@@ -872,13 +873,21 @@ export default function OpportunityDetailPage() {
         </TabsList>
 
         <TabsContent value="overview" className="mt-0">
-          <OverviewTab
-            opp={opp}
-            onEdit={() => setEditOpen(true)}
-            onDelete={() => setDeleteOpen(true)}
-            onCreateQuote={() => quoteMutation.mutate()}
-            quoteLoading={quoteMutation.isPending}
-          />
+          <div className="space-y-6">
+            <OverviewTab
+              opp={opp}
+              onEdit={() => setEditOpen(true)}
+              onDelete={() => setDeleteOpen(true)}
+              onCreateQuote={() => quoteMutation.mutate()}
+              quoteLoading={quoteMutation.isPending}
+            />
+            <CustomFieldsCard
+              objectApiName="Opportunity"
+              customFields={(opp as unknown as { customFields?: Record<string, unknown> | null }).customFields ?? null}
+              saveFn={(patch) => oppsApi.update(id, patch)}
+              onSaved={() => qc.invalidateQueries({ queryKey: ['opportunity', id] })}
+            />
+          </div>
         </TabsContent>
 
         <TabsContent value="lineitems" className="mt-0">

@@ -181,9 +181,12 @@ export const adminApi = {
   listRoles: () => api.get('/admin/roles').then((r) => r.data),
   listObjects: () => api.get('/admin/metadata/objects').then((r) => r.data),
   getObject: (name: string) => api.get(`/admin/metadata/objects/${name}`).then((r) => r.data),
+  createObject: (d: { apiName: string; label: string; labelPlural: string; iconName?: string }) =>
+    api.post('/admin/metadata/objects', d).then((r) => r.data),
   createField: (objectApiName: string, d: unknown) => api.post(`/admin/metadata/objects/${objectApiName}/fields`, d).then((r) => r.data),
   deleteField: (fieldId: string) => api.delete(`/admin/metadata/fields/${fieldId}`).then((r) => r.data),
   listPicklists: () => api.get('/admin/metadata/picklists').then((r) => r.data),
+  getPicklist: (apiName: string) => api.get(`/admin/metadata/picklists/${apiName}`).then((r) => r.data),
   saveLayout: (name: string, layout: unknown) => api.post(`/admin/metadata/objects/${name}/layout`, layout).then((r) => r.data),
   getLayout: (name: string) => api.get(`/admin/metadata/objects/${name}/layout`).then((r) => r.data),
 };
@@ -248,6 +251,10 @@ export const aiApi = {
     api.post('/ai/opportunities/bands', { ids }).then((r) => r.data),
   dashboardSummary: (mineOnly?: boolean) =>
     api.get('/ai/dashboard-summary', { params: mineOnly ? { mineOnly: 'true' } : {} }).then((r) => r.data),
+  telemetry: (days?: number) =>
+    api.get('/ai/admin/telemetry', { params: days ? { days } : {} }).then((r) => r.data),
+  triggerAnomalyScan: () =>
+    api.post('/ai/admin/anomaly-scan').then((r) => r.data),
   chat: (body: { message: string; history?: Array<{ role: 'user' | 'assistant'; text: string }> }) =>
     api.post('/ai/chat', body, { timeout: 120_000 }).then((r) => r.data),
   /**
