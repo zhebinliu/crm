@@ -3,7 +3,13 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminApi } from '@/lib/api';
 import { fmtDate, cn } from '@/lib/utils';
-import { ArrowLeft, Plus, Trash2, Tag, Database, ShieldCheck, Box, Info, Layout } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Tag, Database, ShieldCheck, Box, Info, Layout, Pencil, AlertTriangle } from 'lucide-react';
+import { EditFieldModal } from './edit-field-modal';
+import { PicklistValuesEditor, type PicklistValueDraft } from './picklist-values-editor';
+import {
+  Dialog as ConfirmDialog, DialogContent as ConfirmDialogContent,
+  DialogHeader as ConfirmDialogHeader, DialogTitle as ConfirmDialogTitle,
+} from '@/components/ui/dialog';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -102,8 +108,6 @@ interface ObjectDef {
   fields: Field[];
 }
 
-interface PicklistValueDraft { value: string; label: string; color: string }
-
 interface NewFieldDraft {
   apiName: string;
   label: string;
@@ -119,7 +123,7 @@ interface NewFieldDraft {
 
 const EMPTY_NEW_FIELD: NewFieldDraft = {
   apiName: '', label: '', type: 'STRING', required: false, helpText: '',
-  picklistId: '', picklistValues: [{ value: '', label: '', color: '' }],
+  picklistId: '', picklistValues: [{ value: '', label: '', color: '', isActive: true }],
   referenceTo: '',
 };
 
@@ -130,6 +134,8 @@ export default function MetadataObjectPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [newField, setNewField] = useState<NewFieldDraft>(EMPTY_NEW_FIELD);
   const [error, setError] = useState('');
+  const [editingField, setEditingField] = useState<Field | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Field | null>(null);
 
   const { data: existingPicklists } = useQuery<Array<{ id: string; apiName: string; label: string }>>({
     queryKey: ['admin-picklists'],
@@ -168,6 +174,7 @@ export default function MetadataObjectPage() {
               label: v.label.trim(),
               color: v.color.trim() || undefined,
               displayOrder: i,
+              isActive: v.isActive !== false,
             })),
           };
         }
@@ -267,7 +274,7 @@ export default function MetadataObjectPage() {
               </div>
               <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase text-slate-400">数据类型</Label>
-                <Select value={newField.type} onValueChange={(val) => setNewField({ ...newField, type: val, picklistId: '', picklistValues: [{ value: '', label: '', color: '' }], referenceTo: '' })}>
+                <Select value={newField.type} onValueChange={(val) => setNewField({ ...newField, type: val, picklistId: '', picklistValues: [{ value: '', label: '', color: '', isActive: true }], referenceTo: '' })}>
                   <SelectTrigger className="h-10 border-slate-200">
                     <SelectValue />
                   </SelectTrigger>
@@ -334,77 +341,11 @@ export default function MetadataObjectPage() {
                 </div>
 
                 {!newField.picklistId && (
-                  <div className="space-y-2">
-                    <p className="text-[11px] font-medium text-slate-500">
-                      为该字段定义可选项。<span className="font-mono">编码</span>是存储到数据库的值，<span className="font-mono">显示名</span>是用户看到的文本。
-                    </p>
-                    {newField.picklistValues.map((v, i) => (
-                      <div key={i} className="grid grid-cols-12 gap-2 items-center">
-                        <div className="col-span-4">
-                          <Input
-                            value={v.value}
-                            onChange={(e) => {
-                              const next = [...newField.picklistValues];
-                              next[i] = { ...next[i]!, value: e.target.value };
-                              setNewField({ ...newField, picklistValues: next });
-                            }}
-                            placeholder="编码 hot"
-                            className="h-9 text-sm font-mono border-orange-200/70"
-                          />
-                        </div>
-                        <div className="col-span-5">
-                          <Input
-                            value={v.label}
-                            onChange={(e) => {
-                              const next = [...newField.picklistValues];
-                              next[i] = { ...next[i]!, label: e.target.value };
-                              setNewField({ ...newField, picklistValues: next });
-                            }}
-                            placeholder="显示名 热客户"
-                            className="h-9 text-sm border-orange-200/70"
-                          />
-                        </div>
-                        <div className="col-span-2">
-                          <Input
-                            value={v.color}
-                            onChange={(e) => {
-                              const next = [...newField.picklistValues];
-                              next[i] = { ...next[i]!, color: e.target.value };
-                              setNewField({ ...newField, picklistValues: next });
-                            }}
-                            placeholder="#ef4444"
-                            className="h-9 text-xs font-mono border-orange-200/70"
-                          />
-                        </div>
-                        <div className="col-span-1 flex items-center justify-end">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0 text-slate-300 hover:text-red-500"
-                            onClick={() => {
-                              const next = newField.picklistValues.filter((_, j) => j !== i);
-                              setNewField({ ...newField, picklistValues: next.length > 0 ? next : [{ value: '', label: '', color: '' }] });
-                            }}
-                          >
-                            <Trash2 size={13} />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="rounded-xl h-8 font-bold gap-1 border-orange-200 text-orange-600 hover:bg-orange-100 text-xs"
-                      onClick={() => setNewField({
-                        ...newField,
-                        picklistValues: [...newField.picklistValues, { value: '', label: '', color: '' }],
-                      })}
-                    >
-                      <Plus size={12} /> 添加选项
-                    </Button>
-                  </div>
+                  <PicklistValuesEditor
+                    values={newField.picklistValues}
+                    onChange={(next) => setNewField({ ...newField, picklistValues: next })}
+                    hint="为该字段定义可选项。编码是存储到数据库的值，显示名是用户看到的文本。"
+                  />
                 )}
               </div>
             )}
@@ -465,9 +406,11 @@ export default function MetadataObjectPage() {
              </div>
              <Card className="border-none shadow-xl shadow-slate-200/30 overflow-hidden rounded-3xl">
                <CardContent className="p-0">
-                  <FieldTable fields={customFields} onDelete={(id) => {
-                    if (confirm('确认删除此字段？该操作将永久移除相关存储空间。')) deleteMutation.mutate(id);
-                  }} />
+                  <FieldTable
+                    fields={customFields}
+                    onEdit={(f) => setEditingField(f)}
+                    onDelete={(f) => setPendingDelete(f)}
+                  />
                </CardContent>
              </Card>
           </div>
@@ -481,12 +424,80 @@ export default function MetadataObjectPage() {
              </div>
              <Card className="border-none shadow-xl shadow-slate-200/30 overflow-hidden rounded-3xl opacity-80 transition-opacity hover:opacity-100">
                <CardContent className="p-0">
-                  <FieldTable fields={systemFields} onDelete={null} />
+                  <FieldTable
+                    fields={systemFields}
+                    onEdit={(f) => setEditingField(f)}
+                    onDelete={null}
+                  />
                </CardContent>
              </Card>
           </div>
         )}
       </div>
+
+      {/* Edit field modal */}
+      {editingField && (
+        <EditFieldModal
+          open
+          field={editingField}
+          objectApiName={objectName}
+          onClose={() => setEditingField(null)}
+        />
+      )}
+
+      {/* Delete confirmation with consequence warning */}
+      {pendingDelete && (
+        <ConfirmDialog open onOpenChange={(v) => !v && setPendingDelete(null)}>
+          <ConfirmDialogContent className="max-w-md rounded-3xl">
+            <ConfirmDialogHeader>
+              <ConfirmDialogTitle className="text-xl font-black flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl bg-red-100 text-red-600 flex items-center justify-center">
+                  <AlertTriangle size={17} />
+                </div>
+                删除字段「{pendingDelete.label}」？
+              </ConfirmDialogTitle>
+            </ConfirmDialogHeader>
+            <div className="space-y-3 mt-3 text-sm">
+              <p className="text-slate-700 font-bold">此操作不可撤销，请确认：</p>
+              <ul className="space-y-2 text-xs text-slate-600 font-medium pl-1">
+                <li className="flex gap-2">
+                  <span className="text-red-500 shrink-0">•</span>
+                  <span>该对象上所有现有记录中存储的 <code className="font-mono bg-slate-100 px-1 rounded">{pendingDelete.apiName}</code> 字段值会立即<strong className="text-red-600">失去访问入口</strong>（数据仍在 customFields JSON 内但不再展示/校验）</span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-red-500 shrink-0">•</span>
+                  <span>引用了该字段的<strong>布局、工作流条件、校验规则、报表视图</strong>会失效，需要手动清理</span>
+                </li>
+                {(pendingDelete.type === 'PICKLIST' || pendingDelete.type === 'MULTI_PICKLIST') && (
+                  <li className="flex gap-2">
+                    <span className="text-amber-500 shrink-0">•</span>
+                    <span>关联的下拉选项库 (Picklist) <strong>不会被删除</strong>，可在其他字段复用</span>
+                  </li>
+                )}
+              </ul>
+              <div className="p-3 rounded-xl bg-amber-50 text-xs font-bold text-amber-700 flex items-start gap-2">
+                <Info size={13} className="mt-0.5 shrink-0" />
+                <span>建议先在生产环境暂停使用一段时间再删除，或通过编辑把字段设为非必填以替代删除。</span>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" className="rounded-xl font-bold" onClick={() => setPendingDelete(null)}>
+                  取消
+                </Button>
+                <Button
+                  className="rounded-xl font-bold bg-red-500 hover:bg-red-600 text-white"
+                  onClick={() => {
+                    deleteMutation.mutate(pendingDelete.id);
+                    setPendingDelete(null);
+                  }}
+                  disabled={deleteMutation.isPending}
+                >
+                  确认删除
+                </Button>
+              </div>
+            </div>
+          </ConfirmDialogContent>
+        </ConfirmDialog>
+      )}
 
       {!isLoading && !fields.length && (
         <div className="py-24 text-center bg-white rounded-[2.5rem] border border-dashed border-slate-200">
@@ -498,7 +509,13 @@ export default function MetadataObjectPage() {
   );
 }
 
-function FieldTable({ fields, onDelete }: { fields: Field[]; onDelete: ((id: string) => void) | null }) {
+function FieldTable({
+  fields, onEdit, onDelete,
+}: {
+  fields: Field[];
+  onEdit: (field: Field) => void;
+  onDelete: ((field: Field) => void) | null;
+}) {
   return (
     <Table>
       <TableHeader className="bg-slate-50/50">
@@ -508,14 +525,14 @@ function FieldTable({ fields, onDelete }: { fields: Field[]; onDelete: ((id: str
           <TableHead className="py-3 font-bold text-slate-500 uppercase tracking-tighter text-[10px]">数据类型</TableHead>
           <TableHead className="py-3 font-bold text-slate-500 uppercase tracking-tighter text-[10px]">规则</TableHead>
           <TableHead className="py-3 font-bold text-slate-500 uppercase tracking-tighter text-[10px] text-right pr-10">创建日期</TableHead>
-          {onDelete && <TableHead className="w-[60px]"></TableHead>}
+          <TableHead className="w-[100px] text-right pr-6 text-[10px] font-bold text-slate-500 uppercase tracking-tighter">操作</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {fields.map((f) => (
           <TableRow key={f.id} className="group transition-colors hover:bg-slate-50/50">
             <TableCell className="py-4 px-6 font-bold text-ink text-sm transition-colors group-hover:text-indigo-600">{f.label}</TableCell>
-            <TableCell className="py-4 font-mono text-[11px] text-slate-400 uppercase tracking-tight">{f.apiName}</TableCell>
+            <TableCell className="py-4 font-mono text-[11px] text-slate-400 tracking-tight">{f.apiName}</TableCell>
             <TableCell className="py-4 text-xs">
                <Badge variant="outline" className={cn("rounded-md border-none font-bold text-[10px] px-2 py-0", TYPE_STYLE[f.type] || "bg-slate-100 text-slate-500")}>
                  {TYPE_LABEL[f.type] ?? f.type}
@@ -529,18 +546,30 @@ function FieldTable({ fields, onDelete }: { fields: Field[]; onDelete: ((id: str
                </div>
             </TableCell>
             <TableCell className="py-4 text-right pr-10 text-[11px] text-slate-400 font-medium">{fmtDate(f.createdAt)}</TableCell>
-            {onDelete && (
-              <TableCell className="py-4 pr-6">
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className="h-8 w-8 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
-                  onClick={() => onDelete(f.id)}
+            <TableCell className="py-4 pr-6">
+              <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
+                  onClick={() => onEdit(f)}
+                  title="编辑字段"
                 >
-                  <Trash2 size={14} />
+                  <Pencil size={13} />
                 </Button>
-              </TableCell>
-            )}
+                {onDelete && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-slate-400 hover:text-red-500 hover:bg-red-50"
+                    onClick={() => onDelete(f)}
+                    title="删除字段"
+                  >
+                    <Trash2 size={13} />
+                  </Button>
+                )}
+              </div>
+            </TableCell>
           </TableRow>
         ))}
       </TableBody>
