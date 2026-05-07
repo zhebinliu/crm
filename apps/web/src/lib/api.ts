@@ -155,6 +155,8 @@ export const workflowApi = {
   deleteRule: (id: string) => api.delete(`/admin/workflow-rules/${id}`).then((r) => r.data),
   listValidation: (p?: Record<string, unknown>) => api.get('/admin/validation-rules', { params: p }).then((r) => r.data),
   createValidation: (d: unknown) => api.post('/admin/validation-rules', d).then((r) => r.data),
+  updateValidation: (id: string, d: unknown) => api.put(`/admin/validation-rules/${id}`, d).then((r) => r.data),
+  deleteValidation: (id: string) => api.delete(`/admin/validation-rules/${id}`).then((r) => r.data),
   executions: (p?: Record<string, unknown>) => api.get('/admin/workflow-rules/executions', { params: p }).then((r) => r.data),
   auditLog: (p?: Record<string, unknown>) => api.get('/admin/workflow-rules/audit-log', { params: p }).then((r) => r.data),
 };
