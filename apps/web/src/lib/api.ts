@@ -231,6 +231,11 @@ export const emailTemplatesApi = {
   remove: (id: string) => api.delete(`/admin/email-templates/${id}`).then((r) => r.data),
 };
 
+export const importApi = {
+  importCsv: (objectApiName: string, csv: string) =>
+    api.post(`/admin/import/${objectApiName}`, { csv }, { timeout: 120_000 }).then((r) => r.data),
+};
+
 export const listViewsApi = {
   list: (objectApiName: string) =>
     api.get('/list-views', { params: { objectApiName } }).then((r) => r.data),

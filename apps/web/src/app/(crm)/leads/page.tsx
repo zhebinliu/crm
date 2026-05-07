@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { CreateRecordModal } from '@/components/dynamic/create-record-modal';
 import { FilterBar, FilterField } from '@/components/crm/filter-bar';
 import { ListViewSelector } from '@/components/crm/list-view-selector';
+import { CsvImportButton } from '@/components/crm/csv-import-button';
 import { Plus, Users } from 'lucide-react';
 import { DataTable, Column } from '@/components/crm/data-table';
 
@@ -199,13 +200,16 @@ export default function LeadsPage() {
             共 {data?.total ?? leads.length} 条线索
           </p>
         </div>
-        <Button
-          className="bg-brand hover:bg-brand-deep text-white rounded-xl font-bold h-11 px-6 shadow-xl shadow-brand/20 gap-2"
-          onClick={() => setCreateOpen(true)}
-        >
-          <Plus size={16} />
-          新建线索
-        </Button>
+        <div className="flex items-center gap-2">
+          <CsvImportButton objectApiName="Lead" objectLabel="线索" invalidateKeys={['leads']} />
+          <Button
+            className="bg-brand hover:bg-brand-deep text-white rounded-xl font-bold h-11 px-6 shadow-xl shadow-brand/20 gap-2"
+            onClick={() => setCreateOpen(true)}
+          >
+            <Plus size={16} />
+            新建线索
+          </Button>
+        </div>
       </div>
 
       {/* Saved views */}
