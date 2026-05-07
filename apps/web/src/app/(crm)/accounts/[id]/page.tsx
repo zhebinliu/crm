@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -8,6 +8,7 @@ import { accountsApi, contactsApi } from '@/lib/api';
 import { ActivityTimeline } from '@/components/crm/activity-timeline';
 import { AccountBriefingCard } from '@/components/ai/account-briefing-card';
 import { CustomFieldsCard } from '@/components/dynamic/custom-fields-card';
+import { CustomFieldsSection, type CustomFieldsSectionHandle } from '@/components/dynamic/custom-fields-section';
 import { fmtDate, fmtMoney, cn } from '@/lib/utils';
 import {
   ArrowLeft, Building2, Phone, Globe, MapPin,
@@ -86,6 +87,8 @@ function AccountFormModal({
     ...initial,
   });
   const [errors, setErrors] = useState<Partial<AccountFormData>>({});
+  const [customFields, setCustomFields] = useState<Record<string, unknown>>({});
+  const customRef = useRef<CustomFieldsSectionHandle>(null);
 
   const set = (k: keyof AccountFormData) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -110,7 +113,8 @@ function AccountFormModal({
   function handleSubmit(ev: React.FormEvent) {
     ev.preventDefault();
     if (!validate()) return;
-    updateMut.mutate({
+    if (customRef.current && !customRef.current.validate()) return;
+    const payload: Record<string, unknown> = {
       name: form.name.trim(),
       industry: form.industry || undefined,
       phone: form.phone || undefined,
@@ -119,7 +123,11 @@ function AccountFormModal({
       billingCity: form.billingCity || undefined,
       billingCountry: form.billingCountry || undefined,
       description: form.description || undefined,
-    });
+    };
+    if (Object.keys(customFields).length > 0) {
+      payload.customFields = customFields;
+    }
+    updateMut.mutate(payload);
   }
 
   return (
@@ -175,6 +183,15 @@ function AccountFormModal({
             <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">描述</Label>
             <Textarea value={form.description} onChange={set('description')} placeholder="客户简介或备注..." rows={3} className="rounded-xl border-slate-200 resize-none" />
           </div>
+
+          <CustomFieldsSection
+            ref={customRef}
+            objectApiName="Account"
+            value={customFields}
+            onChange={setCustomFields}
+            initial={(initial as { customFields?: Record<string, unknown> } | undefined)?.customFields ?? null}
+          />
+
           <div className="flex justify-end gap-3 pt-2">
             <Button type="button" variant="outline" onClick={onClose} className="rounded-xl h-10 px-5 font-bold border-slate-200">
               取消
