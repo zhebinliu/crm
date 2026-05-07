@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.1",
     "@apollo/server": "^4.11.2",
     "@nestjs/apollo": "^12.2.2",
     "@nestjs/bullmq": "^10.2.3",

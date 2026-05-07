@@ -49,7 +49,10 @@ RUN pnpm --filter @tokenwave/api --prod deploy /out \
  && cp -a /repo/packages/rule-engine/dist \
           /out/node_modules/@tokenwave/rule-engine/dist \
  && cp -a /repo/node_modules/.pnpm/@prisma+client@5.22.0_prisma@5.22.0/node_modules/.prisma \
-          /out/node_modules/.prisma
+          /out/node_modules/.prisma \
+ && rm -rf /out/node_modules/@prisma/client \
+ && cp -a /repo/node_modules/.pnpm/@prisma+client@5.22.0_prisma@5.22.0/node_modules/@prisma/client \
+          /out/node_modules/@prisma/client
 
 # ── Stage 3: runtime ───────────────────────────────────────────────────────
 FROM node:20-alpine AS runner

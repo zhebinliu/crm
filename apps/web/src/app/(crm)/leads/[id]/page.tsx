@@ -11,6 +11,8 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { LeadFormModal } from '../lead-form-modal';
 import { ConvertLeadModal } from './convert-lead-modal';
+import { LeadScoreCard } from '@/components/ai/lead-score-card';
+import { LeadOutreachDrawer } from '@/components/ai/lead-outreach-drawer';
 import {
   ArrowLeft,
   Edit2,
@@ -27,6 +29,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Users,
+  Sparkles,
 } from 'lucide-react';
 
 const STATUS_ZH: Record<string, string> = {
@@ -51,6 +54,7 @@ export default function LeadDetailPage() {
 
   const [editOpen, setEditOpen] = useState(false);
   const [convertOpen, setConvertOpen] = useState(false);
+  const [outreachOpen, setOutreachOpen] = useState(false);
 
   const { data: lead, isLoading, isError } = useQuery({
     queryKey: ['lead', id],
@@ -200,6 +204,13 @@ export default function LeadDetailPage() {
                 </Button>
               )}
               <Button
+                className="h-10 px-4 rounded-xl font-bold bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white gap-2 shadow-lg shadow-violet-200/50"
+                onClick={() => setOutreachOpen(true)}
+              >
+                <Sparkles size={15} />
+                AI 起草外联
+              </Button>
+              <Button
                 variant="outline"
                 className="h-10 px-4 rounded-xl font-bold border-slate-200 gap-2"
                 onClick={() => setEditOpen(true)}
@@ -224,6 +235,12 @@ export default function LeadDetailPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* AI Score (full width) */}
+      <LeadScoreCard
+        leadId={id}
+        onScoreChanged={() => queryClient.invalidateQueries({ queryKey: ['lead', id] })}
+      />
 
       {/* Info Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -408,6 +425,15 @@ export default function LeadDetailPage() {
           queryClient.invalidateQueries({ queryKey: ['lead', id] });
           queryClient.invalidateQueries({ queryKey: ['leads'] });
         }}
+      />
+
+      {/* AI Outreach Drawer */}
+      <LeadOutreachDrawer
+        leadId={id}
+        leadEmail={lead.email ?? null}
+        leadFullName={`${lead.firstName ?? ''} ${lead.lastName ?? ''}`.trim() || lead.company || '该线索'}
+        open={outreachOpen}
+        onClose={() => setOutreachOpen(false)}
       />
     </div>
   );

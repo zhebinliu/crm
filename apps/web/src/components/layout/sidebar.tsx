@@ -127,6 +127,7 @@ export function Sidebar() {
               <NavGroup label="核心工作区" groupKey="core" collapsedGroups={collapsedGroups} onToggle={toggleGroup}>
                 <NavLink item={{ label: '控制台主页', href: '/dashboard', icon: <LayoutDashboard size={18} /> }} pathname={pathname} />
                 <NavLink item={{ label: '销售预测', href: '/forecasts', icon: <BarChart2 size={18} /> }} pathname={pathname} />
+                <NavLink item={{ label: 'AI 风险看板', href: '/ai/pipeline-risk', icon: <Sparkles size={18} /> }} pathname={pathname} />
                 <NavLink item={{ label: '报表与分析', href: '/reports', icon: <BarChart3 size={18} /> }} pathname={pathname} />
               </NavGroup>
 
@@ -169,6 +170,15 @@ export function Sidebar() {
                   </Link>
                 </TooltipTrigger>
                 <TooltipContent side="right">销售预测</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Link href="/ai/pipeline-risk" className={cn('flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-200',
+                    pathname === '/ai/pipeline-risk' ? 'bg-violet-50 text-violet-600' : 'text-slate-400 hover:bg-slate-50 hover:text-violet-600')}>
+                    <Sparkles size={18} />
+                  </Link>
+                </TooltipTrigger>
+                <TooltipContent side="right">AI 风险看板</TooltipContent>
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
