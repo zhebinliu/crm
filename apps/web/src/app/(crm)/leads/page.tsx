@@ -219,6 +219,7 @@ export default function LeadsPage() {
       <DataTable
         data={leads}
         columns={columns}
+        exportFilename="leads"
         onRowClick={(row) => router.push(`/leads/${row.id}`)}
         onDelete={async (ids) => {
           await deleteMutation.mutateAsync(ids);

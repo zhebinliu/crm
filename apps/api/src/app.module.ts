@@ -32,6 +32,7 @@ import { RecordModule } from './modules/record/record.module';
 import { EmailTemplateModule } from './modules/email-template/email-template.module';
 import { ForecastModule } from './modules/forecast/forecast.module';
 import { AiModule } from './modules/ai/ai.module';
+import { NotificationModule } from './modules/notification/notification.module';
 
 import { HealthController } from './health.controller';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
@@ -86,6 +87,7 @@ import { PermissionsGuard } from './common/guards/permissions.guard';
     EmailTemplateModule,
     ForecastModule,
     AiModule,
+    NotificationModule,
   ],
   controllers: [HealthController],
   providers: [

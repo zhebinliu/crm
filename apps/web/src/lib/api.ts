@@ -229,6 +229,13 @@ export const emailTemplatesApi = {
   remove: (id: string) => api.delete(`/admin/email-templates/${id}`).then((r) => r.data),
 };
 
+export const notificationsApi = {
+  list: (unreadOnly?: boolean, take?: number) =>
+    api.get('/notifications', { params: { unreadOnly: unreadOnly ? 'true' : undefined, take } }).then((r) => r.data),
+  markRead: (id: string) => api.post(`/notifications/${id}/read`).then((r) => r.data),
+  markAllRead: () => api.post('/notifications/mark-all-read').then((r) => r.data),
+};
+
 export const aiApi = {
   oppWinProbability: (oppId: string) =>
     api.get(`/ai/opportunities/${oppId}/win-probability`).then((r) => r.data),

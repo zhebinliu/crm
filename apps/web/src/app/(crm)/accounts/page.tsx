@@ -154,6 +154,7 @@ export default function AccountsPage() {
       <DataTable
         data={accounts}
         columns={columns}
+        exportFilename="accounts"
         onRowClick={(row) => router.push(`/accounts/${row.id}`)}
         onDelete={(ids) => deleteMutation.mutateAsync(ids)}
         onUpdate={(id, field, value) => inlineUpdateMutation.mutateAsync({ id, field, value })}
