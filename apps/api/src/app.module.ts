@@ -40,6 +40,7 @@ import { SharingModule } from './modules/sharing/sharing.module';
 import { CaseModule } from './modules/case/case.module';
 import { CampaignModule } from './modules/campaign/campaign.module';
 import { BulkModule } from './modules/bulk/bulk.module';
+import { FormulaModule } from './modules/formula/formula.module';
 
 import { HealthController } from './health.controller';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
@@ -101,6 +102,7 @@ import { PermissionsGuard } from './common/guards/permissions.guard';
     CaseModule,
     CampaignModule,
     BulkModule,
+    FormulaModule,
   ],
   controllers: [HealthController],
   providers: [
