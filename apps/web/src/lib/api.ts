@@ -746,3 +746,73 @@ export const genericApi = {
   update: (objName: string, id: string, data: unknown) => api.put(`/records/${objName}/${id}`, data).then(r => r.data),
   remove: (objName: string, id: string) => api.delete(`/records/${objName}/${id}`).then(r => r.data),
 };
+
+// ── Wave 19d / 20d: Profiles + Permission Sets + me/permissions ──
+export interface CrudFlags { read?: boolean; write?: boolean; create?: boolean; delete?: boolean }
+export interface FieldFlags { read?: boolean; write?: boolean }
+
+export interface ProfileDto {
+  id: string;
+  tenantId: string;
+  apiName: string;
+  label: string;
+  description?: string | null;
+  isSystem: boolean;
+  objectCrud: Record<string, CrudFlags>;
+  fieldPerms: Record<string, FieldFlags>;
+  systemPerms: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PermissionSetDto {
+  id: string;
+  tenantId: string;
+  apiName: string;
+  label: string;
+  description?: string | null;
+  isActive: boolean;
+  objectCrud: Record<string, CrudFlags>;
+  fieldPerms: Record<string, FieldFlags>;
+  systemPerms: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ResolvedPermissionsDto {
+  objectCrud: Record<string, CrudFlags>;
+  fieldPerms: Record<string, FieldFlags>;
+  systemPerms: string[];
+  flat: string[];
+  legacyFallback: boolean;
+}
+
+export const profilesApi = {
+  list: () => api.get<ProfileDto[]>('/admin/profiles').then((r) => r.data),
+  get: (id: string) => api.get<ProfileDto>(`/admin/profiles/${id}`).then((r) => r.data),
+  create: (d: { apiName: string; label: string; description?: string }) =>
+    api.post<ProfileDto>('/admin/profiles', d).then((r) => r.data),
+  update: (id: string, d: Partial<ProfileDto>) =>
+    api.patch<ProfileDto>(`/admin/profiles/${id}`, d).then((r) => r.data),
+  remove: (id: string) => api.delete(`/admin/profiles/${id}`).then((r) => r.data),
+  assignUser: (id: string, userId: string) =>
+    api.post(`/admin/profiles/${id}/assign-user`, { userId }).then((r) => r.data),
+};
+
+export const permissionSetsApi = {
+  list: () => api.get<PermissionSetDto[]>('/admin/permission-sets').then((r) => r.data),
+  get: (id: string) => api.get<PermissionSetDto>(`/admin/permission-sets/${id}`).then((r) => r.data),
+  create: (d: { apiName: string; label: string; description?: string }) =>
+    api.post<PermissionSetDto>('/admin/permission-sets', d).then((r) => r.data),
+  update: (id: string, d: Partial<PermissionSetDto>) =>
+    api.patch<PermissionSetDto>(`/admin/permission-sets/${id}`, d).then((r) => r.data),
+  remove: (id: string) => api.delete(`/admin/permission-sets/${id}`).then((r) => r.data),
+  assignUser: (id: string, userId: string, expiresAt?: string | null) =>
+    api.post(`/admin/permission-sets/${id}/assign-user`, { userId, expiresAt: expiresAt ?? undefined }).then((r) => r.data),
+  revokeUser: (id: string, userId: string) =>
+    api.delete(`/admin/permission-sets/${id}/assign-user/${userId}`).then((r) => r.data),
+};
+
+export const mePermissionsApi = {
+  resolved: () => api.get<ResolvedPermissionsDto>('/me/permissions').then((r) => r.data),
+};

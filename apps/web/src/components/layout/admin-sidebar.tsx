@@ -7,6 +7,7 @@ import {
   Workflow, Shield, LogOut, ArrowLeft, LayoutDashboard, Database, Mail, Sparkles, History, ShieldAlert,
   UserSearch, Trash2, FileLock2, Webhook, BarChart3, PieChart, Layers,
   Globe, UsersRound, Inbox, Share2,
+  ShieldCheck, KeyRound,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth';
 import { useRouter } from 'next/navigation';
@@ -18,6 +19,7 @@ interface NavItem {
   label: string;
   href: string;
   icon: React.ReactNode;
+  group?: string;
 }
 
 interface NavGroup {
@@ -28,6 +30,8 @@ interface NavGroup {
 
 const ADMIN_NAV: NavItem[] = [
   { label: '用户与权限', href: '/admin/users', icon: <Users size={18} /> },
+  { label: 'Profile (基线)', href: '/admin/profiles', icon: <ShieldCheck size={18} />, group: '权限' },
+  { label: 'Permission Set (叠加)', href: '/admin/permission-sets', icon: <KeyRound size={18} />, group: '权限' },
   { label: '工作流自动化', href: '/admin/workflow', icon: <Workflow size={18} /> },
   { label: '校验规则', href: '/admin/validation-rules', icon: <ShieldAlert size={18} /> },
   { label: '流程审批', href: '/admin/approvals', icon: <Shield size={18} /> },
@@ -118,7 +122,13 @@ export function AdminSidebar() {
       </nav>
 
       {/* User Session */}
-      <div className="mt-auto p-4">
+      <div className="mt-auto p-4 space-y-2">
+        <Link
+          href="/admin/me/permissions"
+          className="flex items-center gap-2 px-3 py-2 rounded-xl text-[12px] font-semibold text-[#8A8D98] hover:bg-[#161921] hover:text-brand border border-transparent hover:border-[#1C1F26] transition-all"
+        >
+          <KeyRound size={14} /> 我的权限
+        </Link>
         <div className="bg-[#161921] rounded-2xl p-4 border border-[#1C1F26] shadow-inner">
           <div className="flex items-center gap-3">
              <div className="relative">
