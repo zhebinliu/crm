@@ -55,9 +55,11 @@ export class MfaService {
     // The userId here came from an already-validated JWT (the controller
     // pulls it from req.user.id), so a unique-key lookup is safe — the
     // tenant binding has already been verified by JwtStrategy.
-    const user = await this.prisma.user.findUnique({
+    const user = await this.prisma.user.findFirst({
       where: { id: userId },
       include: { tenant: true, mfa: true },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ...({ skipTenantGuard: true } as any),
     });
     if (!user) throw new NotFoundException({ code: 'NOT_FOUND', message: 'User not found' });
     if (user.mfa?.enabled) {

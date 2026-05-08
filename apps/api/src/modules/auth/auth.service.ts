@@ -77,9 +77,14 @@ export class AuthService {
     if (!ok) {
       throw new UnauthorizedException({ code: 'INVALID_MFA_CODE', message: 'Invalid MFA code' });
     }
-    const user = await this.prisma.user.findUnique({
+    const user = await this.prisma.user.findFirst({
+      // id is globally unique (cuid); tenant context is recovered via include.
+      // skipTenantGuard is safe here because the MFA challenge token already
+      // proved possession of an authenticated User.id.
       where: { id: payload.sub },
       include: { tenant: true },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ...({ skipTenantGuard: true } as any),
     });
     if (!user || !user.isActive || user.deletedAt) {
       throw new UnauthorizedException({ code: 'UNAUTHORIZED', message: 'User disabled' });
@@ -89,7 +94,8 @@ export class AuthService {
 
   /** Shared finalization for both single-step and post-MFA logins. */
   private async completeLogin(userId: string, tenantSlug: string) {
-    const user = await this.prisma.user.findUnique({
+    const user = await this.prisma.user.findFirst({
+      // id is globally unique; tenant context comes via included relations.
       where: { id: userId },
       include: {
         roles: {
@@ -98,6 +104,8 @@ export class AuthService {
           },
         },
       },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ...({ skipTenantGuard: true } as any),
     });
     if (!user) throw new UnauthorizedException({ code: 'UNAUTHORIZED', message: 'User not found' });
 
@@ -147,6 +155,8 @@ export class AuthService {
     const rec = await this.prisma.refreshToken.findUnique({
       where: { tokenHash: hash },
       include: { user: true },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ...({ skipTenantGuard: true } as any),
     });
     if (!rec || rec.revokedAt || rec.expiresAt < new Date()) {
       throw new UnauthorizedException({ code: 'UNAUTHORIZED', message: 'Invalid refresh token' });

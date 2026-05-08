@@ -86,7 +86,13 @@ export class ApiKeyService {
     // collisions are possible (prefix is unique per tenant, not globally),
     // so we may have multiple rows to compare against.
     const candidates = await this.prisma.apiKey.findMany({
+      // The verify path doesn't have a tenant context yet — that's the whole
+      // point: the API key is the authentication. Skip the tenant guard;
+      // bcrypt.compare below is constant-time and bcrypt's own salt rules out
+      // cross-tenant collisions on the same prefix.
       where: { prefix, revokedAt: null },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ...({ skipTenantGuard: true } as any),
     });
     if (candidates.length === 0) return null;
 

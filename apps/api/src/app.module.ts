@@ -1,6 +1,8 @@
 import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { IdempotencyMiddleware } from './common/idempotency.middleware';
+import { RequestIdMiddleware } from './common/request-id.middleware';
+import { ApiKeyAuthMiddleware } from './common/api-key-auth.middleware';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
 import { BullModule } from '@nestjs/bullmq';
@@ -8,6 +10,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { GraphQLModule } from '@nestjs/graphql';
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
 import { join } from 'path';
+import { PrismaService } from './prisma/prisma.service';
 
 import { PrismaModule } from './prisma/prisma.module';
 import { OutboxModule } from './common/outbox.module';
@@ -49,6 +52,12 @@ import { GdprModule } from './modules/gdpr/gdpr.module';
 import { EmbeddingsModule } from './modules/embeddings/embeddings.module';
 import { AppThrottlerModule } from './common/throttler/throttler.module';
 import { TenantThrottlerGuard } from './common/throttler/tenant-throttler.guard';
+import { FieldHistoryModule } from './common/field-history.module';
+import { AttachmentModule } from './modules/attachment/attachment.module';
+import { QueryModule } from './modules/query/query.module';
+import { CompositeModule } from './modules/composite/composite.module';
+import { DataLoaderModule } from './common/graphql/dataloader.module';
+import { DataLoaderRegistry } from './common/graphql/dataloader.registry';
 
 import { HealthController } from './health.controller';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
@@ -71,17 +80,25 @@ import { PermissionsGuard } from './common/guards/permissions.guard';
         };
       },
     }),
-    GraphQLModule.forRoot<ApolloDriverConfig>({
+    GraphQLModule.forRootAsync<ApolloDriverConfig>({
       driver: ApolloDriver,
-      autoSchemaFile: join(process.cwd(), 'src/schema.gql'),
-      sortSchema: true,
-      playground: true,
-      context: ({ req, res, connectionParams, extra }) =>
-        connectionParams ? { connectionParams, extra } : { req, res },
-      // Real-time subscriptions over GraphQL-WS (modern protocol).
-      subscriptions: {
-        'graphql-ws': true,
-      },
+      // Pull PrismaService into the context factory so per-request
+      // DataLoader registries get a real client (Wave 18f).
+      inject: [PrismaService],
+      useFactory: (prisma: PrismaService) => ({
+        autoSchemaFile: join(process.cwd(), 'src/schema.gql'),
+        sortSchema: true,
+        playground: true,
+        context: ({ req, res, connectionParams, extra }: { req?: { user?: { tenantId?: string } }; res?: unknown; connectionParams?: Record<string, unknown>; extra?: unknown }) => {
+          if (connectionParams) return { connectionParams, extra };
+          // Build a per-request loader registry. tenantId may not be set
+          // yet (the JwtAuthGuard runs after context is built) — the
+          // registry methods accept tenantId per-call.
+          const loaders = new DataLoaderRegistry(prisma, req?.user?.tenantId ?? '');
+          return { req, res, loaders };
+        },
+        subscriptions: { 'graphql-ws': true },
+      }),
     }),
 
     PrismaModule,
@@ -123,6 +140,11 @@ import { PermissionsGuard } from './common/guards/permissions.guard';
     GdprModule,
     EmbeddingsModule,
     AppThrottlerModule,
+    FieldHistoryModule,
+    AttachmentModule,
+    QueryModule,
+    CompositeModule,
+    DataLoaderModule,
   ],
   controllers: [HealthController],
   providers: [
@@ -134,6 +156,9 @@ import { PermissionsGuard } from './common/guards/permissions.guard';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
-    consumer.apply(IdempotencyMiddleware).forRoutes('*');
+    // Order: request-id (correlation) → api-key (auth alt) → idempotency.
+    consumer
+      .apply(RequestIdMiddleware, ApiKeyAuthMiddleware, IdempotencyMiddleware)
+      .forRoutes('*');
   }
 }
