@@ -72,6 +72,8 @@ model Tenant {
   reports             ReportDef[]
   dashboards          Dashboard[]
   dashboardComponents DashboardComponent[]
+  productBundles      ProductBundle[]
+  priceTiers          PriceTier[]
 
   @@map("tenants")
 }
@@ -792,6 +794,9 @@ model Product {
   oppLineItems   OpportunityLineItem[]
   quoteLineItems QuoteLineItem[]
   orderLineItems OrderLineItem[]
+  bundle         ProductBundle?
+  bundleItems    BundleItem[]    @relation("BundleChild")
+  priceTiers     PriceTier[]     @relation("ProductTiers")
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -2052,4 +2057,72 @@ model DashboardComponent {
 
   @@index([tenantId, dashboardId])
   @@map("dashboard_components")
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// CPQ — BUNDLES + TIERED PRICING (Wave 19e)
+// ════════════════════════════════════════════════════════════════════════════
+// ProductBundle: a parent product with required + optional child products.
+// Example: "iPhone 套装" includes 1 iPhone + optional case + optional charger.
+model ProductBundle {
+  id             String   @id @default(cuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // The parent "wrapper" product. Bundles are themselves Products so they
+  // appear in price books / quote line items normally.
+  productId      String   @unique
+  product        Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  // "all_or_nothing" | "configurable" — drives whether children must be
+  // included as a unit or selected
+  type           String   @default("configurable")
+  // Whether the bundle's price equals sum-of-children (false) or is fixed
+  // and discounts/markups distribute over children (true)
+  fixedPrice     Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  items          BundleItem[]
+
+  @@index([tenantId])
+  @@map("product_bundles")
+}
+
+model BundleItem {
+  id              String   @id @default(cuid())
+  bundleId        String
+  bundle          ProductBundle @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  childProductId  String
+  childProduct    Product  @relation("BundleChild", fields: [childProductId], references: [id])
+  required        Boolean  @default(true)
+  defaultQuantity Decimal  @default(1) @db.Decimal(18, 4)
+  minQuantity     Decimal  @default(1) @db.Decimal(18, 4)
+  maxQuantity     Decimal? @db.Decimal(18, 4)
+  // Sort order within the bundle
+  displayOrder    Int      @default(0)
+
+  @@index([bundleId])
+  @@map("bundle_items")
+}
+
+// Tiered price rule: discount based on quantity or list-price thresholds.
+// Replaces and extends the existing PriceRule (which becomes a
+// general-purpose container).
+model PriceTier {
+  id              String   @id @default(cuid())
+  tenantId        String
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productId       String
+  product         Product  @relation("ProductTiers", fields: [productId], references: [id], onDelete: Cascade)
+  // Optional priceBook context — if set, only applies to this priceBook.
+  priceBookId     String?
+  // Tier triggers on quantity ≥ this value
+  minQuantity     Decimal  @db.Decimal(18, 4)
+  // The tier's effect: either a fixed unitPrice OR a discount percentage
+  unitPrice       Decimal? @db.Decimal(18, 4)
+  discountPercent Decimal? @db.Decimal(5, 2) // 0..100
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([tenantId, productId, minQuantity])
+  @@map("price_tiers")
 }
