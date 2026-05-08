@@ -68,6 +68,10 @@ model Tenant {
   recordEmbeddings    RecordEmbedding[]
   fieldHistory        FieldHistory[]
   apiKeys             ApiKey[]
+  reportTypes         ReportType[]
+  reports             ReportDef[]
+  dashboards          Dashboard[]
+  dashboardComponents DashboardComponent[]
 
   @@map("tenants")
 }
@@ -144,25 +148,25 @@ model ApiKey {
 // Dimension: 1536 (OpenAI text-embedding-3-small / ada-002 default).
 
 model RecordEmbedding {
-  id          String   @id @default(cuid())
-  tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  recordType  String // "lead" | "contact" | "account" | "opportunity" | "case" | "activity"
-  recordId    String
+  id         String @id @default(cuid())
+  tenantId   String
+  tenant     Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  recordType String // "lead" | "contact" | "account" | "opportunity" | "case" | "activity"
+  recordId   String
 
   // Vector embedding. Stored as Float[] (pgvector fallback).
-  embedding   Float[]
+  embedding Float[]
 
   // Hash of the input text — used to skip re-embedding when content hasn't
   // changed (saves OpenAI tokens on every record save).
   contentHash String
-  content     String   @db.Text
+  content     String @db.Text
 
-  model       String   @default("text-embedding-3-small")
-  dimension   Int      @default(1536)
+  model     String @default("text-embedding-3-small")
+  dimension Int    @default(1536)
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([tenantId, recordType, recordId])
   @@index([tenantId, recordType])
@@ -212,9 +216,9 @@ model User {
   forecastUpdateEntries ForecastUpdateEntry[] @relation("ForecastEntryUser")
   notifications         Notification[]
   listViews             ListView[]
-  recordShares          RecordShare[]      @relation("RecordShareUser")
-  ownedCases            Case[]             @relation("CaseOwner")
-  ownedCampaigns        Campaign[]         @relation("CampaignOwner")
+  recordShares          RecordShare[]         @relation("RecordShareUser")
+  ownedCases            Case[]                @relation("CaseOwner")
+  ownedCampaigns        Campaign[]            @relation("CampaignOwner")
   mfa                   UserMfaSecret?
 
   @@unique([tenantId, email])
@@ -285,19 +289,19 @@ enum ShareAccessLevel {
 }
 
 model RecordShare {
-  id           String           @id @default(cuid())
-  tenantId     String
-  tenant       Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  recordType   String           // "lead" | "account" | "opportunity" | ...
-  recordId     String
+  id          String           @id @default(cuid())
+  tenantId    String
+  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  recordType  String // "lead" | "account" | "opportunity" | ...
+  recordId    String
   // User this row grants access to
-  userId       String
-  user         User             @relation("RecordShareUser", fields: [userId], references: [id], onDelete: Cascade)
-  accessLevel  ShareAccessLevel @default(READ)
+  userId      String
+  user        User             @relation("RecordShareUser", fields: [userId], references: [id], onDelete: Cascade)
+  accessLevel ShareAccessLevel @default(READ)
   // "manual" | "rule:<ruleId>" | "team" — provenance of this share
-  reason       String           @default("manual")
-  createdAt    DateTime         @default(now())
-  createdById  String?
+  reason      String           @default("manual")
+  createdAt   DateTime         @default(now())
+  createdById String?
 
   @@unique([tenantId, recordType, recordId, userId])
   @@index([tenantId, userId, recordType])
@@ -534,7 +538,7 @@ model Lead {
   convertedContactId String?
   convertedOppId     String?
 
-  campaignMembers    CampaignMember[]
+  campaignMembers CampaignMember[]
 
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -635,8 +639,8 @@ model Contact {
   mailingPostalCode String?
   mailingCountry    String?
 
-  cases             Case[]
-  campaignMembers   CampaignMember[]
+  cases           Case[]
+  campaignMembers CampaignMember[]
 
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -1116,15 +1120,15 @@ model Attachment {
   createdAt   DateTime @default(now())
 
   // ─── Production storage fields (Wave 18c) ────────────────────────────────
-  storageBackend   String   @default("s3")     // "s3" | "local"
-  storageKey       String?                     // object key in bucket / disk path
-  sizeBytes        Int?                        // canonical size in bytes (mirror of `size` long-term)
-  checksum         String?                     // SHA-256 hex
-  uploadedById     String?                     // user who triggered presign
-  uploadedAt       DateTime?                   // set on confirm
-  virusScanStatus  String?  @default("pending") // pending | clean | infected | skipped
-  status           String?  @default("pending") // pending | uploaded | confirmed | deleted
-  deletedAt        DateTime?
+  storageBackend  String    @default("s3") // "s3" | "local"
+  storageKey      String? // object key in bucket / disk path
+  sizeBytes       Int? // canonical size in bytes (mirror of `size` long-term)
+  checksum        String? // SHA-256 hex
+  uploadedById    String? // user who triggered presign
+  uploadedAt      DateTime? // set on confirm
+  virusScanStatus String?   @default("pending") // pending | clean | infected | skipped
+  status          String?   @default("pending") // pending | uploaded | confirmed | deleted
+  deletedAt       DateTime?
 
   @@index([tenantId, targetType, targetId])
   @@index([tenantId, status])
@@ -1155,38 +1159,38 @@ enum CasePriority {
 }
 
 model Case {
-  id           String       @id @default(cuid())
-  tenantId     String
-  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  caseNumber   String       // human-readable (e.g. "CASE-0042")
-  subject      String
-  description  String?      @db.Text
-  status       CaseStatus   @default(NEW)
-  priority     CasePriority @default(NORMAL)
+  id              String       @id @default(cuid())
+  tenantId        String
+  tenant          Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  caseNumber      String // human-readable (e.g. "CASE-0042")
+  subject         String
+  description     String?      @db.Text
+  status          CaseStatus   @default(NEW)
+  priority        CasePriority @default(NORMAL)
   // origin: "email" | "phone" | "web" | "portal" | "api" | "chat"
-  source       String       @default("web")
+  source          String       @default("web")
   // SLA fields (could be enriched from a future SLA policy table).
-  slaTargetAt  DateTime?
+  slaTargetAt     DateTime?
   firstResponseAt DateTime?
-  resolvedAt   DateTime?
+  resolvedAt      DateTime?
 
-  ownerId      String
-  owner        User         @relation("CaseOwner", fields: [ownerId], references: [id])
+  ownerId   String
+  owner     User     @relation("CaseOwner", fields: [ownerId], references: [id])
   // Polymorphic-ish relations to standard CRM objects
-  accountId    String?
-  account      Account?     @relation(fields: [accountId], references: [id], onDelete: SetNull)
-  contactId    String?
-  contact      Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  accountId String?
+  account   Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  contactId String?
+  contact   Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
 
-  customFields Json         @default("{}")
+  customFields Json @default("{}")
 
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
-  createdById  String?
-  updatedById  String?
-  deletedAt    DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdById String?
+  updatedById String?
+  deletedAt   DateTime?
 
-  comments     CaseComment[]
+  comments CaseComment[]
 
   @@unique([tenantId, caseNumber])
   @@index([tenantId, status])
@@ -1197,16 +1201,16 @@ model Case {
 }
 
 model CaseComment {
-  id         String   @id @default(cuid())
-  tenantId   String
-  caseId     String
-  case       Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  authorId   String
-  body       String   @db.Text
+  id        String   @id @default(cuid())
+  tenantId  String
+  caseId    String
+  case      Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  authorId  String
+  body      String   @db.Text
   // Internal notes are visible to staff only; public comments may surface
   // to the customer portal.
-  isPublic   Boolean  @default(false)
-  createdAt  DateTime @default(now())
+  isPublic  Boolean  @default(false)
+  createdAt DateTime @default(now())
 
   @@index([tenantId, caseId])
   @@map("case_comments")
@@ -1237,33 +1241,33 @@ enum CampaignType {
 }
 
 model Campaign {
-  id              String           @id @default(cuid())
-  tenantId        String
-  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  ownerId         String
-  owner           User             @relation("CampaignOwner", fields: [ownerId], references: [id])
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ownerId  String
+  owner    User   @relation("CampaignOwner", fields: [ownerId], references: [id])
 
   name            String
-  type            CampaignType     @default(EMAIL)
-  status          CampaignStatus   @default(PLANNED)
+  type            CampaignType   @default(EMAIL)
+  status          CampaignStatus @default(PLANNED)
   startDate       DateTime?
   endDate         DateTime?
   // Budget tracking
-  budgetedCost    Decimal?         @db.Decimal(18, 2)
-  actualCost      Decimal?         @db.Decimal(18, 2)
-  expectedRevenue Decimal?         @db.Decimal(18, 2)
+  budgetedCost    Decimal?       @db.Decimal(18, 2)
+  actualCost      Decimal?       @db.Decimal(18, 2)
+  expectedRevenue Decimal?       @db.Decimal(18, 2)
   // Aggregates auto-recalculated from CampaignMember
-  numSent         Int              @default(0)
-  numResponses    Int              @default(0)
-  numConverted    Int              @default(0)
-  description     String?          @db.Text
-  customFields    Json             @default("{}")
+  numSent         Int            @default(0)
+  numResponses    Int            @default(0)
+  numConverted    Int            @default(0)
+  description     String?        @db.Text
+  customFields    Json           @default("{}")
 
-  members         CampaignMember[]
+  members CampaignMember[]
 
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  deletedAt       DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
   @@index([tenantId, status])
   @@index([tenantId, ownerId])
@@ -1282,21 +1286,21 @@ enum CampaignMemberStatus {
 }
 
 model CampaignMember {
-  id           String                @id @default(cuid())
-  tenantId     String
-  tenant       Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  campaignId   String
-  campaign     Campaign              @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  id          String               @id @default(cuid())
+  tenantId    String
+  tenant      Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campaignId  String
+  campaign    Campaign             @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   // Either a Lead or a Contact (one must be set). Standard SF-style attribution.
-  leadId       String?
-  lead         Lead?                 @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  contactId    String?
-  contact      Contact?              @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  status       CampaignMemberStatus  @default(SENT)
-  respondedAt  DateTime?
+  leadId      String?
+  lead        Lead?                @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  contactId   String?
+  contact     Contact?             @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  status      CampaignMemberStatus @default(SENT)
+  respondedAt DateTime?
 
-  createdAt    DateTime              @default(now())
-  updatedAt    DateTime              @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([tenantId, campaignId, leadId, contactId])
   @@index([tenantId, campaignId, status])
@@ -1619,25 +1623,25 @@ model SequenceCounter {
 // ════════════════════════════════════════════════════════════════════════════
 
 model ListView {
-  id            String   @id @default(cuid())
-  tenantId      String
-  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  ownerId       String
-  owner         User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ownerId  String
+  owner    User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
   // "Lead" | "Opportunity" | "Account" | "Contact" | "<custom>__c"
   objectApiName String
   name          String
-  filters       Json     @default("{}")
+  filters       Json    @default("{}")
   sortBy        String?
-  sortDir       String?  // "asc" | "desc"
+  sortDir       String? // "asc" | "desc"
   // Visible to whole tenant when true
-  isShared      Boolean  @default(false)
+  isShared      Boolean @default(false)
   // The user's default view for this object — at most one per (user, object)
-  isDefault     Boolean  @default(false)
+  isDefault     Boolean @default(false)
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tenantId, objectApiName])
   @@index([tenantId, ownerId, objectApiName])
@@ -1660,23 +1664,23 @@ enum NotificationLevel {
 }
 
 model Notification {
-  id        String             @id @default(cuid())
-  tenantId  String
-  tenant    Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  level     NotificationLevel  @default(INFO)
+  level      NotificationLevel @default(INFO)
   // Short category like "activity_due" / "approval_pending" / "ai_high_risk"
-  kind      String
-  title     String
-  body      String?            @db.Text
+  kind       String
+  title      String
+  body       String?           @db.Text
   // Optional CRM target so the UI can deep-link on click
   targetType String?
   targetId   String?
 
-  readAt     DateTime?
-  createdAt  DateTime           @default(now())
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
 
   @@index([tenantId, userId, readAt])
   @@index([tenantId, userId, createdAt])
@@ -1760,13 +1764,13 @@ model CustomRecord {
 // for later inspection/replay by an operator. resolvedAt != null means a human
 // (or replay job) has handled it.
 model WebhookDeadLetter {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   tenantId       String
   url            String
-  method         String   @default("POST")
-  headers        Json     @default("{}")
+  method         String    @default("POST")
+  headers        Json      @default("{}")
   body           String // raw JSON body that was attempted
-  attempts       Int      @default(0)
+  attempts       Int       @default(0)
   lastStatus     Int?
   lastError      String?
   idempotencyKey String
@@ -1775,8 +1779,8 @@ model WebhookDeadLetter {
   recordId       String?
   resolvedAt     DateTime?
   resolvedNote   String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@index([tenantId, resolvedAt, createdAt])
   @@index([tenantId, idempotencyKey])
@@ -1796,40 +1800,40 @@ model WebhookDeadLetter {
 // Person only carries identity-grade data (name, normalized email/phone).
 
 model Person {
-  id        String  @id @default(cuid())
-  tenantId  String
-  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   // Canonical identity values (normalized: lowercase email, digits-only phone)
-  primaryEmail      String?
-  primaryEmailNorm  String? // lowercase, trimmed — used for fuzzy match
-  primaryPhone      String?
-  primaryPhoneNorm  String? // digits only — used for fuzzy match
-  firstName         String?
-  lastName          String?
-  fullNameNorm      String? // lowercase concatenated for fuzzy match
+  primaryEmail     String?
+  primaryEmailNorm String? // lowercase, trimmed — used for fuzzy match
+  primaryPhone     String?
+  primaryPhoneNorm String? // digits only — used for fuzzy match
+  firstName        String?
+  lastName         String?
+  fullNameNorm     String? // lowercase concatenated for fuzzy match
 
   // Free-form identity data (alternate emails/phones, social handles, etc.)
   identifiers Json @default("[]") // [{kind: "email"|"phone"|"linkedin"|..., value, source, verifiedAt}]
 
   // Counts for fast Customer 360 list views
-  leadCount       Int @default(0)
-  contactCount    Int @default(0)
-  campaignCount   Int @default(0)
-  caseCount       Int @default(0)
+  leadCount        Int @default(0)
+  contactCount     Int @default(0)
+  campaignCount    Int @default(0)
+  caseCount        Int @default(0)
   opportunityCount Int @default(0)
 
   // Soft-merge support: when two Persons get merged, the loser's ID points here.
   mergedIntoId String?
-  mergedInto   Person?  @relation("PersonMerge", fields: [mergedIntoId], references: [id])
-  mergedFrom   Person[] @relation("PersonMerge")
+  mergedInto   Person?   @relation("PersonMerge", fields: [mergedIntoId], references: [id])
+  mergedFrom   Person[]  @relation("PersonMerge")
   mergedAt     DateTime?
 
   leads    Lead[]    @relation("LeadPerson")
   contacts Contact[] @relation("ContactPerson")
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
   @@index([tenantId, primaryEmailNorm])
@@ -1843,7 +1847,7 @@ model Person {
 // order on Lead/Contact write; if any rule matches an existing Person the
 // new record links to that Person. If none match a fresh Person is created.
 model IdentityRule {
-  id          String  @id @default(cuid())
+  id          String   @id @default(cuid())
   tenantId    String
   name        String
   description String?
@@ -1851,9 +1855,9 @@ model IdentityRule {
   //             "fuzzy_name" | "first_letter_lastname_email"
   comparator  String
   // Block on match (don't auto-merge, surface as DedupeCandidate)
-  surfaceOnly Boolean @default(false)
-  isActive    Boolean @default(true)
-  priority    Int     @default(100)
+  surfaceOnly Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  priority    Int      @default(100)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -1864,20 +1868,20 @@ model IdentityRule {
 // When the rule says surfaceOnly=true (or two equally-good matches exist),
 // the candidate match is parked here for a human to confirm/reject.
 model DedupeCandidate {
-  id          String  @id @default(cuid())
-  tenantId    String
+  id                String    @id @default(cuid())
+  tenantId          String
   // What just got created/updated
-  sourceType  String  // "lead" | "contact"
-  sourceId    String
+  sourceType        String // "lead" | "contact"
+  sourceId          String
   // What it might be a duplicate of
   candidatePersonId String
-  ruleId      String? // which rule fired
-  score       Float   // 0..1 — confidence
-  status      String  @default("pending") // pending | confirmed_merge | rejected
-  resolvedAt  DateTime?
-  resolvedById String?
-  resolvedNote String?
-  createdAt   DateTime @default(now())
+  ruleId            String? // which rule fired
+  score             Float // 0..1 — confidence
+  status            String    @default("pending") // pending | confirmed_merge | rejected
+  resolvedAt        DateTime?
+  resolvedById      String?
+  resolvedNote      String?
+  createdAt         DateTime  @default(now())
 
   @@index([tenantId, status, createdAt])
   @@index([tenantId, sourceType, sourceId])
@@ -1893,15 +1897,15 @@ model DedupeCandidate {
 // fanned out to the platform event bus.
 
 model WebhookEndpoint {
-  id            String   @id @default(cuid())
+  id            String                @id @default(cuid())
   tenantId      String
-  slug          String   @unique // path component
+  slug          String                @unique // path component
   description   String?
-  signingSecret String              // shared with caller for HMAC verification
-  eventType     String?             // label inserted into the dispatched event name
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  signingSecret String // shared with caller for HMAC verification
+  eventType     String? // label inserted into the dispatched event name
+  isActive      Boolean               @default(true)
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
   inboundEvents WebhookInboundEvent[]
 
   @@index([tenantId, isActive])
@@ -1915,7 +1919,7 @@ model WebhookInboundEvent {
   endpoint       WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
   idempotencyKey String
   headers        Json            @default("{}")
-  body           String          // raw JSON body
+  body           String // raw JSON body
   receivedAt     DateTime
   processedAt    DateTime?
   attempts       Int             @default(0)
@@ -1948,4 +1952,104 @@ model RecycleBinEntry {
   @@index([tenantId, restoredAt, purgeAfter])
   @@index([tenantId, recordType])
   @@map("recycle_bin_entries")
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// REPORTS & DASHBOARDS (Wave 19a)
+// ════════════════════════════════════════════════════════════════════════════
+// Salesforce-style Reports + Dashboards. ReportType describes the queryable
+// surface (base object + permitted joins + columns). ReportDef is a saved
+// query (columns / filters / groupBy / aggregates) on top of a ReportType.
+// Dashboards collect ReportDef rows into grid-laid-out visual components.
+
+model ReportType {
+  // A "report type" defines the base object + which related objects can join.
+  // SF concept: "Opportunities with Account and Owner" is a report type.
+  id               String      @id @default(cuid())
+  tenantId         String
+  tenant           Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  apiName          String // tenant-unique e.g. "opportunities_with_account"
+  label            String
+  baseObject       String // "opportunity" | "lead" | etc.
+  // joinable: list of {object, foreignKey, alias} — for now stored as JSON
+  joins            Json        @default("[]")
+  // available column names from base + joined objects
+  availableColumns Json        @default("[]")
+  isStandard       Boolean     @default(false)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  reports          ReportDef[]
+
+  @@unique([tenantId, apiName])
+  @@map("report_types")
+}
+
+model ReportDef {
+  id           String               @id @default(cuid())
+  tenantId     String
+  tenant       Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  reportTypeId String
+  reportType   ReportType           @relation(fields: [reportTypeId], references: [id], onDelete: Cascade)
+  ownerId      String
+  // "tabular" | "summary" | "matrix"
+  format       String               @default("tabular")
+  name         String
+  description  String?
+  // selected columns + filter list (SOQL-like) + groupBy + sortBy + aggregates
+  // Stored as a single JSON for flexibility:
+  // {
+  //   columns: ["account.name","amount","stage","owner.displayName"],
+  //   filters: [{field,op,value}, ...],
+  //   groupBy: ["stage"],          // tabular: empty
+  //   aggregates: [{type:"sum",field:"amount"}, {type:"count"}],
+  //   sortBy: [{field:"amount",direction:"desc"}],
+  //   limit: 1000
+  // }
+  config       Json
+  isPublic     Boolean              @default(false)
+  folderName   String? // simple grouping; SF has Report Folders, we keep flat for v1
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  components   DashboardComponent[]
+
+  @@index([tenantId, ownerId])
+  @@map("report_defs")
+}
+
+model Dashboard {
+  id          String               @id @default(cuid())
+  tenantId    String
+  tenant      Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ownerId     String
+  name        String
+  description String?
+  // grid layout: array of {componentId, x, y, w, h}
+  layout      Json                 @default("[]")
+  isPublic    Boolean              @default(false)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  components  DashboardComponent[]
+
+  @@index([tenantId, ownerId])
+  @@map("dashboards")
+}
+
+model DashboardComponent {
+  id            String    @id @default(cuid())
+  tenantId      String
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  dashboardId   String
+  dashboard     Dashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+  reportId      String
+  report        ReportDef @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  // "table" | "bar" | "line" | "pie" | "metric" | "donut"
+  visualization String    @default("table")
+  title         String
+  // chart-specific config (axes, colors, legend) as JSON
+  options       Json      @default("{}")
+  position      Json      @default("{}") // {x, y, w, h}
+  createdAt     DateTime  @default(now())
+
+  @@index([tenantId, dashboardId])
+  @@map("dashboard_components")
 }

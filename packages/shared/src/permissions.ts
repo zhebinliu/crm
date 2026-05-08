@@ -19,6 +19,7 @@ export const OBJECTS = [
   'note',
   'attachment',
   'report',
+  'dashboard',
   'admin',
   'workflow',
   'workflowRule',
@@ -61,6 +62,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, PermissionCode[]> = {
     'pricebook.read',
     'activity.*',
     'report.read',
+    'report.write',
+    'dashboard.read',
+    'dashboard.write',
     'approval.approve',
     'user.read',
     'ai.invoke',
@@ -89,6 +93,10 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, PermissionCode[]> = {
     'case.read',
     'case.write',
     'campaign.read',
+    'report.read',
+    'report.write',
+    'dashboard.read',
+    'dashboard.write',
   ],
   approver: ['approval.approve', 'opportunity.read', 'quote.read', 'order.read', 'contract.read'],
   read_only: [
@@ -102,6 +110,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, PermissionCode[]> = {
     'product.read',
     'activity.read',
     'ai.read',
+    'report.read',
+    'dashboard.read',
   ],
 };
 
