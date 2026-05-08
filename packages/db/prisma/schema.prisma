@@ -83,6 +83,8 @@ model Tenant {
   orgWideDefaults     OrgWideDefault[]
   publicGroups        PublicGroup[]
   queues              Queue[]
+  profiles            Profile[]
+  permissionSets      PermissionSet[]
 
   @@map("tenants")
 }
@@ -232,6 +234,8 @@ model User {
   ownedCampaigns        Campaign[]            @relation("CampaignOwner")
   userTerritories       UserTerritory[]       @relation("UserTerritoryRel")
   mfa                   UserMfaSecret?
+  userProfile           UserProfile?       @relation("UserProfileRel")
+  userPermissionSets    UserPermissionSet[] @relation("UserPermissionSetRel")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -356,6 +360,81 @@ model UserRole {
 
   @@id([userId, roleId])
   @@map("user_roles")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// PROFILE + PERMISSION SET (Wave 19d) — Salesforce-style two-layer model
+// ─────────────────────────────────────────────────────────────────────────
+// Profile  = mandatory baseline. Each User has exactly one Profile.
+// PermSet  = additive overlays. Zero-or-many. Boolean-OR'd onto profile.
+// The legacy Role model still exists for record-level sharing hierarchy.
+
+model Profile {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  apiName     String
+  label       String
+  description String?
+  isSystem    Boolean  @default(false)
+  // Object-level CRUD: { lead: {read,write,delete}, opportunity: {...} }
+  objectCrud  Json     @default("{}")
+  // Field-level: { "lead.amount": {read,write}, ... }
+  fieldPerms  Json     @default("{}")
+  // System perms: ["api_enabled","modify_all_data","view_all_data", ...]
+  systemPerms String[] @default([])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  users       UserProfile[]
+
+  @@unique([tenantId, apiName])
+  @@map("profiles")
+}
+
+model UserProfile {
+  userId     String   @id
+  user       User     @relation("UserProfileRel", fields: [userId], references: [id], onDelete: Cascade)
+  profileId  String
+  profile    Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  assignedAt DateTime @default(now())
+
+  @@index([profileId])
+  @@map("user_profiles")
+}
+
+model PermissionSet {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  apiName     String
+  label       String
+  description String?
+  isActive    Boolean  @default(true)
+  // Same shape as Profile but ADDITIVE — adds permissions on top of base.
+  objectCrud  Json     @default("{}")
+  fieldPerms  Json     @default("{}")
+  systemPerms String[] @default([])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  assignments UserPermissionSet[]
+
+  @@unique([tenantId, apiName])
+  @@map("permission_sets")
+}
+
+model UserPermissionSet {
+  id              String        @id @default(cuid())
+  userId          String
+  user            User          @relation("UserPermissionSetRel", fields: [userId], references: [id], onDelete: Cascade)
+  permissionSetId String
+  permissionSet   PermissionSet @relation(fields: [permissionSetId], references: [id], onDelete: Cascade)
+  assignedById    String?
+  expiresAt       DateTime?
+  assignedAt      DateTime      @default(now())
+
+  @@unique([userId, permissionSetId])
+  @@index([userId])
+  @@map("user_permission_sets")
 }
 
 model Session {

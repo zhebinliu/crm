@@ -6,6 +6,7 @@ import { randomBytes, createHash } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { JwtPayload } from './jwt.strategy';
 import { MfaService } from './mfa.service';
+import { PermissionResolverService } from '../permissions/permission-resolver.service';
 
 /**
  * Short-lived "MFA pending" token returned mid-login. Verified by
@@ -24,6 +25,7 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly mfa: MfaService,
+    private readonly permResolver: PermissionResolverService,
   ) {}
 
   async login(tenantSlug: string, email: string, password: string) {
@@ -116,9 +118,10 @@ export class AuthService {
     });
 
     const roleCodes = user.roles.map((ur) => ur.role.code);
-    const perms = Array.from(
-      new Set(user.roles.flatMap((ur) => ur.role.permissions.map((rp) => rp.permission.code))),
-    );
+    // Resolve permissions via the new Profile + PermSet layer. The resolver
+    // soft-falls-back to legacy Role perms when a user has no Profile yet.
+    const resolved = await this.permResolver.resolveForUser(user.id);
+    const perms = resolved.flat;
 
     const accessToken = await this.issueAccessToken({
       sub: user.id,
