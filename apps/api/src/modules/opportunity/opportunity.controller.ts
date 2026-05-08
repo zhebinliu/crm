@@ -86,14 +86,18 @@ export class OpportunityController {
 
   @Get()
   @RequirePermissions('opportunity.read')
-  list(@TenantId() tenantId: string, @Query() query: ListOpportunitiesQuery) {
-    return this.service.list(tenantId, query);
+  list(
+    @TenantId() tenantId: string,
+    @Query() query: ListOpportunitiesQuery,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.service.list(tenantId, query, user);
   }
 
   @Get(':id')
   @RequirePermissions('opportunity.read')
-  get(@TenantId() tenantId: string, @Param('id') id: string) {
-    return this.service.get(tenantId, id);
+  get(@TenantId() tenantId: string, @Param('id') id: string, @CurrentUser() user: RequestUser) {
+    return this.service.get(tenantId, id, user);
   }
 
   @Post()

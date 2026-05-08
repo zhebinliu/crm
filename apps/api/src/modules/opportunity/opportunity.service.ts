@@ -12,6 +12,7 @@ import type { OpportunityStage } from '@tokenwave/shared';
 import type { RequestUser } from '../../common/types/request-context';
 import { RecycleBinService } from '../recycle-bin/recycle-bin.service';
 import { EmbeddingService, opportunityContent } from '../embeddings/embedding.service';
+import { FlsService } from '../fls/fls.service';
 
 export interface OppListOptions {
   search?: string;
@@ -43,6 +44,7 @@ export class OpportunityService extends BaseEntityService {
     emitter: EventEmitter2,
     outbox: OutboxService,
     recycleBin: RecycleBinService,
+    private readonly fls: FlsService,
     embeddings: EmbeddingService,
   ) {
     super(workflow, validation, audit, emitter, outbox, recycleBin);
@@ -68,7 +70,7 @@ export class OpportunityService extends BaseEntityService {
     });
   }
 
-  async list(tenantId: string, opts: OppListOptions = {}) {
+  async list(tenantId: string, opts: OppListOptions = {}, user?: RequestUser) {
     const { search, stage, ownerId, accountId, forecastCategory, closeDateFrom, closeDateTo, skip = 0, take = 20 } = opts;
 
     const closeDateFilter: Record<string, Date> = {};
@@ -99,10 +101,11 @@ export class OpportunityService extends BaseEntityService {
       this.prisma.opportunity.count({ where }),
     ]);
 
+    await this.fls.filterReadableMany(user, 'opportunity', data as unknown as Record<string, unknown>[]);
     return { data, total };
   }
 
-  async get(tenantId: string, id: string) {
+  async get(tenantId: string, id: string, user?: RequestUser) {
     const opp = await this.prisma.opportunity.findFirst({
       where: { id, tenantId, deletedAt: null },
       include: {
@@ -112,10 +115,12 @@ export class OpportunityService extends BaseEntityService {
       },
     });
     if (!opp) throw new NotFoundException(`Opportunity ${id} not found`);
+    await this.fls.filterReadable(user, 'opportunity', opp as unknown as Record<string, unknown>);
     return opp;
   }
 
   async create(tenantId: string, input: Record<string, unknown>, user: RequestUser) {
+    await this.fls.assertWritable(user, 'opportunity', input);
     await this.beforeSave(tenantId, 'opportunity', input, undefined, user);
 
     const stage = (input.stage as OpportunityStage) ?? 'prospecting';
@@ -149,6 +154,7 @@ export class OpportunityService extends BaseEntityService {
   }
 
   async update(tenantId: string, id: string, input: Record<string, unknown>, user: RequestUser) {
+    await this.fls.assertWritable(user, 'opportunity', input);
     const previous = await this.get(tenantId, id);
     await this.beforeSave(tenantId, 'opportunity', input, previous as Record<string, unknown>, user);
 

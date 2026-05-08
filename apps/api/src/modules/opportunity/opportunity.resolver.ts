@@ -32,7 +32,7 @@ export class OpportunityResolver {
       stage,
       skip,
       take,
-    });
+    }, user);
     return { data: res.data, total: res.total };
   }
 
@@ -42,7 +42,7 @@ export class OpportunityResolver {
     @GqlCurrentUser() user: RequestUser,
     @Args('id', { type: () => ID }) id: string,
   ) {
-    return this.opportunities.get(user.tenantId, id);
+    return this.opportunities.get(user.tenantId, id, user);
   }
 
   @Mutation(() => Opportunity)

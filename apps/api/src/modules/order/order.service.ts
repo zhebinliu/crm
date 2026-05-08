@@ -10,6 +10,7 @@ import { OutboxService } from '../../common/outbox.service';
 import { EVENTS } from '@tokenwave/shared';
 import type { RequestUser } from '../../common/types/request-context';
 import { RecycleBinService } from '../recycle-bin/recycle-bin.service';
+import { FlsService } from '../fls/fls.service';
 
 export interface OrderListOptions {
   accountId?: string;
@@ -29,11 +30,12 @@ export class OrderService extends BaseEntityService {
     emitter: EventEmitter2,
     outbox: OutboxService,
     recycleBin: RecycleBinService,
+    private readonly fls: FlsService,
   ) {
     super(workflow, validation, audit, emitter, outbox, recycleBin);
   }
 
-  async list(tenantId: string, opts: OrderListOptions = {}) {
+  async list(tenantId: string, opts: OrderListOptions = {}, user?: RequestUser) {
     const { accountId, status, quoteId, skip = 0, take = 20 } = opts;
 
     const where = {
@@ -58,10 +60,11 @@ export class OrderService extends BaseEntityService {
       this.prisma.order.count({ where }),
     ]);
 
+    await this.fls.filterReadableMany(user, 'order', data as unknown as Record<string, unknown>[]);
     return { data, total };
   }
 
-  async get(tenantId: string, id: string) {
+  async get(tenantId: string, id: string, user?: RequestUser) {
     const order = await this.prisma.order.findFirst({
       where: { id, tenantId, deletedAt: null },
       include: {
@@ -72,10 +75,12 @@ export class OrderService extends BaseEntityService {
       },
     });
     if (!order) throw new NotFoundException(`Order ${id} not found`);
+    await this.fls.filterReadable(user, 'order', order as unknown as Record<string, unknown>);
     return order;
   }
 
   async create(tenantId: string, input: Record<string, unknown>, user: RequestUser) {
+    await this.fls.assertWritable(user, 'order', input);
     await this.beforeSave(tenantId, 'order', input, undefined, user);
     const orderNumber = await this.nextOrderNumber(tenantId);
 
@@ -142,6 +147,7 @@ export class OrderService extends BaseEntityService {
   }
 
   async update(tenantId: string, id: string, input: Record<string, unknown>, user: RequestUser) {
+    await this.fls.assertWritable(user, 'order', input);
     const previous = await this.get(tenantId, id);
     await this.beforeSave(tenantId, 'order', input, previous as Record<string, unknown>, user);
     const order = await this.prisma.order.update({

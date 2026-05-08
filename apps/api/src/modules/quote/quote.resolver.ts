@@ -21,7 +21,7 @@ export class QuoteResolver {
     @Args('skip', { type: () => Int, nullable: true }) skip?: number,
     @Args('take', { type: () => Int, nullable: true }) take?: number,
   ) {
-    const res = await this.service.list(user.tenantId, { skip, take });
+    const res = await this.service.list(user.tenantId, { skip, take }, user);
     return { data: res.data, total: res.total };
   }
 
@@ -31,7 +31,7 @@ export class QuoteResolver {
     @GqlCurrentUser() user: RequestUser,
     @Args('id', { type: () => ID }) id: string,
   ) {
-    return this.service.get(user.tenantId, id);
+    return this.service.get(user.tenantId, id, user);
   }
 
   @Mutation(() => Quote)
