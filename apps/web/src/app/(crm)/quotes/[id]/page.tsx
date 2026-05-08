@@ -1,14 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
-import { quotesApi, ordersApi, approvalApi, productsApi } from '@/lib/api';
+import { quotesApi, ordersApi, approvalApi, productsApi, cpqApi } from '@/lib/api';
 import { fmtDate, fmtMoney, statusColor, cn } from '@/lib/utils';
 import Link from 'next/link';
 import {
   ArrowLeft, Loader2, AlertCircle, FileText, Plus,
-  SendHorizonal, ShoppingCart, Trash2, Package,
+  SendHorizonal, ShoppingCart, Trash2, Package, Layers,
+  RefreshCw, ArrowRightCircle, CheckCircle2, Sparkles,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -35,7 +36,11 @@ interface LineItem {
   product?: { name: string };
   quantity: number;
   unitPrice: number;
-  totalPrice: number;
+  totalPrice?: number;
+  subtotal?: number;
+  discount?: number | string | null;
+  discountSource?: 'tier' | 'rule' | 'manual' | 'none' | null;
+  description?: string | null;
 }
 
 interface Quote {
@@ -191,6 +196,224 @@ function AddLineItemModal({
   );
 }
 
+// ─── Add Bundle Modal (Wave 20e) ──────────────────────────────────────────────
+function AddBundleModal({
+  quoteId, open, onClose,
+}: {
+  quoteId: string;
+  open: boolean;
+  onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const [bundleId, setBundleId] = useState('');
+  const [quantity, setQuantity] = useState(1);
+  const [error, setError] = useState('');
+
+  const { data: bundlesData, isLoading } = useQuery({
+    queryKey: ['cpq-bundles-lookup'],
+    queryFn: () => cpqApi.listBundles(),
+    enabled: open,
+  });
+  const bundles: Array<{ id: string; product?: { name: string; code?: string | null }; type: string; items?: unknown[] }> =
+    (bundlesData as never) ?? [];
+
+  const mutation = useMutation({
+    mutationFn: () => quotesApi.addBundle(quoteId, { bundleId, quantity }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['quote', quoteId] });
+      onClose();
+      setBundleId('');
+      setQuantity(1);
+      setError('');
+    },
+    onError: (e: unknown) => setError(e instanceof Error ? e.message : '添加 Bundle 失败'),
+  });
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!bundleId) { setError('请选择 Bundle'); return; }
+    if (quantity < 1) { setError('数量必须 ≥ 1'); return; }
+    mutation.mutate();
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-[460px] rounded-2xl">
+        <DialogHeader>
+          <DialogTitle className="text-lg font-bold text-ink flex items-center gap-2">
+            <Layers size={16} className="text-brand" />
+            添加 Bundle
+          </DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 rounded-xl px-4 py-3">
+              <AlertCircle size={14} /> {error}
+            </div>
+          )}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              Bundle <span className="text-red-400">*</span>
+            </Label>
+            {isLoading ? (
+              <div className="p-3 text-center text-xs font-bold text-slate-400">
+                <Loader2 size={14} className="animate-spin mx-auto" />
+              </div>
+            ) : bundles.length === 0 ? (
+              <div className="p-3 text-center text-xs font-bold text-slate-400 border border-slate-100 rounded-xl">
+                未配置任何 Bundle
+              </div>
+            ) : (
+              <SelectPrimitive value={bundleId} onValueChange={setBundleId}>
+                <SelectTriggerPrimitive className="rounded-xl border-slate-200 h-10 text-sm">
+                  <SelectValuePrimitive placeholder="选择 Bundle…" />
+                </SelectTriggerPrimitive>
+                <SelectContentPrimitive className="rounded-xl">
+                  {bundles.map((b) => (
+                    <SelectItemPrimitive key={b.id} value={b.id} className="rounded-lg text-sm">
+                      <span className="font-medium">{b.product?.name ?? b.id}</span>
+                      <span className="ml-2 text-xs text-slate-400">
+                        ({b.items?.length ?? 0} 子产品)
+                      </span>
+                    </SelectItemPrimitive>
+                  ))}
+                </SelectContentPrimitive>
+              </SelectPrimitive>
+            )}
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">数量</Label>
+            <Input
+              type="number"
+              min={1}
+              value={quantity}
+              onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+              className="rounded-xl border-slate-200 h-10"
+            />
+          </div>
+          <DialogFooter className="flex gap-3">
+            <Button type="button" variant="ghost" onClick={onClose} className="flex-1 rounded-xl h-10 font-bold">
+              取消
+            </Button>
+            <Button
+              type="submit"
+              disabled={mutation.isPending}
+              className="flex-1 bg-brand hover:bg-brand-deep text-white rounded-xl font-bold h-10"
+            >
+              {mutation.isPending ? <Loader2 size={14} className="animate-spin mr-2" /> : <Plus size={14} className="mr-2" />}
+              添加
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Convert-to-Order confirm dialog (Wave 20e) ───────────────────────────────
+function ConvertToOrderDialog({
+  quoteId, quoteNumber, open, onClose, isAdmin,
+}: {
+  quoteId: string;
+  quoteNumber: string;
+  open: boolean;
+  onClose: () => void;
+  isAdmin: boolean;
+}) {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const [skipApproval, setSkipApproval] = useState(false);
+  const [error, setError] = useState('');
+  const [createdOrderId, setCreatedOrderId] = useState<string | null>(null);
+
+  const mutation = useMutation<{ id: string; orderNumber?: string }>({
+    mutationFn: () => quotesApi.convertToOrder(quoteId, { skipApproval: isAdmin && skipApproval }),
+    onSuccess: (data) => {
+      setCreatedOrderId(data.id);
+      queryClient.invalidateQueries({ queryKey: ['quote', quoteId] });
+    },
+    onError: (e: unknown) => setError(e instanceof Error ? e.message : '转单失败'),
+  });
+
+  function handleClose() {
+    if (createdOrderId) {
+      router.push(`/orders/${createdOrderId}`);
+    }
+    setCreatedOrderId(null);
+    setError('');
+    setSkipApproval(false);
+    onClose();
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
+      <DialogContent className="sm:max-w-[460px] rounded-2xl">
+        <DialogHeader>
+          <DialogTitle className="text-lg font-bold text-ink flex items-center gap-2">
+            <ArrowRightCircle size={18} className="text-emerald-600" />
+            转为订单
+          </DialogTitle>
+        </DialogHeader>
+        {createdOrderId ? (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-sm font-bold text-emerald-700 bg-emerald-50 rounded-xl px-4 py-3">
+              <CheckCircle2 size={14} /> 报价单 {quoteNumber} 已成功转为订单
+            </div>
+            <DialogFooter className="flex gap-3">
+              <Button onClick={handleClose} className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold h-10">
+                打开订单
+              </Button>
+            </DialogFooter>
+          </div>
+        ) : (
+          <>
+            <div className="space-y-3 text-sm text-slate-600">
+              <p>
+                确认将报价单 <span className="font-bold text-ink">{quoteNumber}</span> 转为订单？
+              </p>
+              <div className="p-3 rounded-xl bg-amber-50 border border-amber-100 text-xs text-amber-900 leading-relaxed">
+                <p className="font-bold mb-1">折扣阈值规则</p>
+                若本报价单的实际折扣超过租户阈值且没有 <span className="font-mono">APPROVED</span>{' '}
+                的审批流，后端会拒绝并返回 <span className="font-mono">APPROVAL_REQUIRED</span>。
+                请先 “提交审批” 走流程，或由管理员勾选下方 “跳过审批”。
+              </div>
+              {isAdmin && (
+                <label className="flex items-center gap-2 text-xs font-bold text-slate-700 px-1 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={skipApproval}
+                    onChange={(e) => setSkipApproval(e.target.checked)}
+                    className="w-4 h-4 rounded"
+                  />
+                  跳过审批（仅管理员）
+                </label>
+              )}
+              {error && (
+                <div className="flex items-center gap-2 text-xs font-bold text-red-600 bg-red-50 rounded-xl px-3 py-2">
+                  <AlertCircle size={12} /> {error}
+                </div>
+              )}
+            </div>
+            <DialogFooter className="flex gap-3">
+              <Button type="button" variant="ghost" onClick={handleClose} className="flex-1 rounded-xl h-10 font-bold">
+                取消
+              </Button>
+              <Button
+                onClick={() => mutation.mutate()}
+                disabled={mutation.isPending}
+                className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold h-10"
+              >
+                {mutation.isPending ? <Loader2 size={14} className="animate-spin mr-2" /> : <ArrowRightCircle size={14} className="mr-2" />}
+                确认转单
+              </Button>
+            </DialogFooter>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── Delete confirmation ──────────────────────────────────────────────────────
 function DeleteQuoteDialog({ quoteId, quoteNumber, open, onClose }: {
   quoteId: string; quoteNumber: string; open: boolean; onClose: () => void;
@@ -227,12 +450,21 @@ function DeleteQuoteDialog({ quoteId, quoteNumber, open, onClose }: {
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
+import { useAuthStore } from '@/stores/auth';
+
 export default function QuoteDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { user } = useAuthStore();
+  const isAdmin = !!user?.roles?.some((r: unknown) =>
+    typeof r === 'string' ? r === 'admin' : (r as { role?: { code?: string } })?.role?.code === 'admin',
+  );
   const [addLineItemOpen, setAddLineItemOpen] = useState(false);
+  const [addBundleOpen, setAddBundleOpen] = useState(false);
+  const [convertOpen, setConvertOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [repriceFlash, setRepriceFlash] = useState(false);
 
   const { data: quote, isLoading, isError } = useQuery<Quote>({
     queryKey: ['quote', id],
@@ -255,6 +487,18 @@ export default function QuoteDetailPage() {
     mutationFn: () => quotesApi.remove(id),
     onSuccess: () => router.push('/quotes'),
   });
+
+  const repriceMutation = useMutation({
+    mutationFn: () => quotesApi.reprice(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['quote', id] });
+      setRepriceFlash(true);
+      setTimeout(() => setRepriceFlash(false), 1800);
+    },
+  });
+
+  // suppress lint for unused var
+  void deleteMutation;
 
   if (isLoading) {
     return (
@@ -310,7 +554,44 @@ export default function QuoteDetailPage() {
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Wave 20e: CPQ actions */}
+          <Button
+            variant="outline"
+            onClick={() => setAddBundleOpen(true)}
+            className="rounded-xl h-10 px-4 font-bold gap-1.5"
+          >
+            <Layers size={14} /> 添加 Bundle
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => repriceMutation.mutate()}
+            disabled={repriceMutation.isPending}
+            className={cn(
+              'rounded-xl h-10 px-4 font-bold gap-1.5',
+              repriceFlash && 'bg-emerald-50 text-emerald-700 border-emerald-200',
+            )}
+            title="按当前阶梯/规则重新计算每行单价并汇总"
+          >
+            {repriceMutation.isPending ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : repriceFlash ? (
+              <CheckCircle2 size={14} className="text-emerald-600" />
+            ) : (
+              <RefreshCw size={14} />
+            )}
+            重新计价
+          </Button>
+          {(quote.status === 'approved' || isAdmin) && (
+            <Button
+              onClick={() => setConvertOpen(true)}
+              className="bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold h-10 px-5 gap-1.5"
+            >
+              <ArrowRightCircle size={14} />
+              转为订单
+            </Button>
+          )}
+
           {quote.status === 'draft' && (
             <Button
               onClick={() => submitApprovalMutation.mutate()}
@@ -327,12 +608,12 @@ export default function QuoteDetailPage() {
             <Button
               onClick={() => createOrderMutation.mutate()}
               disabled={createOrderMutation.isPending}
-              className="bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold h-10 px-5"
+              className="bg-slate-700 hover:bg-slate-800 text-white rounded-xl font-bold h-10 px-5"
             >
               {createOrderMutation.isPending
                 ? <Loader2 size={14} className="animate-spin mr-2" />
                 : <ShoppingCart size={14} className="mr-2" />}
-              从商机创建订单
+              旧版：从商机创建订单
             </Button>
           )}
           <Button
@@ -415,7 +696,7 @@ export default function QuoteDetailPage() {
                   <table className="w-full">
                     <thead className="border-b border-slate-100">
                       <tr>
-                        {['产品', '数量', '单价', '合计'].map((h) => (
+                        {['产品', '数量', '单价', '折扣来源', '合计'].map((h) => (
                           <th key={h} className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">
                             {h}
                           </th>
@@ -427,10 +708,21 @@ export default function QuoteDetailPage() {
                         <tr key={item.id ?? idx} className="hover:bg-slate-50/60 transition-colors">
                           <td className="px-6 py-4 text-sm font-medium text-ink">
                             {item.product?.name ?? item.productId}
+                            {item.description && (
+                              <div className="text-[11px] font-medium text-slate-400 mt-0.5">{item.description}</div>
+                            )}
                           </td>
-                          <td className="px-6 py-4 text-sm text-slate-600">{item.quantity}</td>
-                          <td className="px-6 py-4 text-sm text-slate-600">{fmtMoney(item.unitPrice)}</td>
-                          <td className="px-6 py-4 text-sm font-bold text-ink">{fmtMoney(item.totalPrice)}</td>
+                          <td className="px-6 py-4 text-sm text-slate-600 tabular-nums">{Number(item.quantity)}</td>
+                          <td className="px-6 py-4 text-sm text-slate-600 tabular-nums">{fmtMoney(item.unitPrice)}</td>
+                          <td className="px-6 py-4">
+                            <DiscountSourceBadge
+                              source={item.discountSource ?? null}
+                              discount={item.discount}
+                            />
+                          </td>
+                          <td className="px-6 py-4 text-sm font-bold text-ink tabular-nums">
+                            {fmtMoney(item.totalPrice ?? item.subtotal ?? 0)}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -482,6 +774,14 @@ export default function QuoteDetailPage() {
 
       {/* Modals */}
       <AddLineItemModal quoteId={id} open={addLineItemOpen} onClose={() => setAddLineItemOpen(false)} />
+      <AddBundleModal quoteId={id} open={addBundleOpen} onClose={() => setAddBundleOpen(false)} />
+      <ConvertToOrderDialog
+        quoteId={id}
+        quoteNumber={quote.quoteNumber}
+        open={convertOpen}
+        onClose={() => setConvertOpen(false)}
+        isAdmin={isAdmin}
+      />
       <DeleteQuoteDialog
         quoteId={id}
         quoteNumber={quote.quoteNumber}
@@ -491,3 +791,42 @@ export default function QuoteDetailPage() {
     </div>
   );
 }
+
+// ─── Discount-source pill (Wave 20e) ─────────────────────────────────────────
+const SOURCE_ZH: Record<string, string> = {
+  tier: '阶梯',
+  rule: '规则',
+  manual: '手工',
+  none: '无',
+};
+const SOURCE_COLOR: Record<string, string> = {
+  tier: 'bg-cyan-50 text-cyan-700',
+  rule: 'bg-violet-50 text-violet-700',
+  manual: 'bg-amber-50 text-amber-700',
+  none: 'bg-slate-100 text-slate-500',
+};
+
+function DiscountSourceBadge({
+  source, discount,
+}: {
+  source: 'tier' | 'rule' | 'manual' | 'none' | null;
+  discount?: number | string | null;
+}) {
+  const key = source ?? 'none';
+  const pct = discount == null ? null : Number(discount);
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className={cn('inline-flex items-center px-2 h-5 rounded-full text-[10px] font-black uppercase tracking-wider', SOURCE_COLOR[key])}>
+        {key === 'tier' && <Sparkles size={10} className="mr-0.5" />}
+        {SOURCE_ZH[key]}
+      </span>
+      {pct != null && pct > 0 && (
+        <span className="text-[11px] font-bold text-slate-500 tabular-nums">−{pct.toFixed(2)}%</span>
+      )}
+    </span>
+  );
+}
+
+// suppress lint for unused
+void useEffect;
+void useMemo;

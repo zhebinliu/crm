@@ -8,6 +8,7 @@ import {
   UserSearch, Trash2, FileLock2, Webhook, BarChart3, PieChart, Layers,
   Globe, UsersRound, Inbox, Share2,
   ShieldCheck, KeyRound,
+  Package,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth';
 import { useRouter } from 'next/navigation';
@@ -58,6 +59,11 @@ const SHARING_NAV: NavGroup = {
     { label: '队列', href: '/admin/sharing/queues', icon: <Inbox size={16} /> },
   ],
 };
+
+const CPQ_NAV: NavItem[] = [
+  { label: 'CPQ Bundles', href: '/admin/cpq/bundles', icon: <Package size={18} /> },
+  { label: '阶梯定价', href: '/admin/cpq/price-tiers', icon: <Layers size={18} /> },
+];
 
 export function AdminSidebar() {
   const pathname = usePathname();
@@ -116,6 +122,13 @@ export function AdminSidebar() {
             </span>
           </div>
           {SHARING_NAV.items.map((item) => (
+            <AdminNavLink key={item.href} item={item} pathname={pathname} />
+          ))}
+
+          <div className="px-2 pt-4 pb-2">
+            <span className="text-[10px] font-bold text-[#4B4E56] uppercase tracking-widest">CPQ</span>
+          </div>
+          {CPQ_NAV.map((item) => (
             <AdminNavLink key={item.href} item={item} pathname={pathname} />
           ))}
         </div>

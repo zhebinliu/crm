@@ -117,6 +117,42 @@ export const quotesApi = {
   update: (id: string, d: unknown) => api.put(`/quotes/${id}`, d).then((r) => r.data),
   remove: (id: string) => api.delete(`/quotes/${id}`).then((r) => r.data),
   addLineItem: (id: string, d: unknown) => api.post(`/quotes/${id}/line-items`, d).then((r) => r.data),
+  // ─── CPQ / Wave 19e/20e ───
+  addBundle: (id: string, d: { bundleId: string; quantity?: number; priceBookId?: string; customizations?: Array<{ childProductId: string; quantity?: number; include?: boolean }> }) =>
+    api.post(`/quotes/${id}/add-bundle`, d).then((r) => r.data),
+  reprice: (id: string) => api.post(`/quotes/${id}/reprice`).then((r) => r.data),
+  convertToOrder: (id: string, d?: { skipApproval?: boolean }) =>
+    api.post(`/quotes/${id}/convert-to-order`, d ?? {}).then((r) => r.data),
+};
+
+// ─── CPQ admin: ProductBundle + PriceLine + (optional) PriceTier ───
+export const cpqApi = {
+  // bundles
+  listBundles: () => api.get('/admin/product-bundles').then((r) => r.data),
+  getBundle: (id: string) => api.get(`/admin/product-bundles/${id}`).then((r) => r.data),
+  createBundle: (d: { productId: string; type?: string; fixedPrice?: boolean }) =>
+    api.post('/admin/product-bundles', d).then((r) => r.data),
+  updateBundle: (id: string, d: { type?: string; fixedPrice?: boolean }) =>
+    api.patch(`/admin/product-bundles/${id}`, d).then((r) => r.data),
+  deleteBundle: (id: string) => api.delete(`/admin/product-bundles/${id}`).then((r) => r.data),
+  addBundleItem: (id: string, d: { childProductId: string; required?: boolean; defaultQuantity?: number; minQuantity?: number; maxQuantity?: number; displayOrder?: number }) =>
+    api.post(`/admin/product-bundles/${id}/items`, d).then((r) => r.data),
+  updateBundleItem: (id: string, itemId: string, d: { required?: boolean; defaultQuantity?: number; minQuantity?: number; maxQuantity?: number; displayOrder?: number }) =>
+    api.patch(`/admin/product-bundles/${id}/items/${itemId}`, d).then((r) => r.data),
+  removeBundleItem: (id: string, itemId: string) =>
+    api.delete(`/admin/product-bundles/${id}/items/${itemId}`).then((r) => r.data),
+  // pricing
+  priceLine: (d: { productId: string; quantity: number; priceBookId?: string; currencyCode?: string }) =>
+    api.post('/cpq/price-line', d).then((r) => r.data),
+  // price tiers — endpoints not yet shipped on backend; calls will gracefully
+  // surface a "管理员请求暂未可用" state if the route 404s.
+  listTiers: (productId?: string) =>
+    api.get('/admin/price-tiers', { params: productId ? { productId } : undefined }).then((r) => r.data),
+  createTier: (d: { productId: string; minQuantity: number; unitPrice?: number; discountPercent?: number; priceBookId?: string }) =>
+    api.post('/admin/price-tiers', d).then((r) => r.data),
+  updateTier: (id: string, d: { minQuantity?: number; unitPrice?: number | null; discountPercent?: number | null; isActive?: boolean }) =>
+    api.patch(`/admin/price-tiers/${id}`, d).then((r) => r.data),
+  deleteTier: (id: string) => api.delete(`/admin/price-tiers/${id}`).then((r) => r.data),
 };
 
 export const ordersApi = {
