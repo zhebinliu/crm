@@ -894,6 +894,66 @@ export const translationApi = {
       .then((r) => r.data),
 };
 
+// ── Cases (Wave 19h) ───────────────────────────────────────────────────────
+
+export const casesApi = {
+  list: (p?: Record<string, unknown>) => api.get('/cases', { params: p }).then((r) => r.data),
+  get: (id: string) => api.get(`/cases/${id}`).then((r) => r.data),
+  create: (d: unknown) => api.post('/cases', d).then((r) => r.data),
+  update: (id: string, d: unknown) => api.put(`/cases/${id}`, d).then((r) => r.data),
+  remove: (id: string) => api.delete(`/cases/${id}`).then((r) => r.data),
+  comments: (id: string) => api.get(`/cases/${id}/comments`).then((r) => r.data),
+  addComment: (id: string, body: string, isPublic?: boolean) =>
+    api.post(`/cases/${id}/comments`, { body, isPublic }).then((r) => r.data),
+  // SLA milestones
+  milestones: (id: string) => api.get(`/cases/${id}/milestones`).then((r) => r.data),
+  markFirstResponse: (id: string) =>
+    api.post(`/cases/${id}/first-response`).then((r) => r.data),
+  // Knowledge deflection
+  suggestArticles: (id: string, limit?: number) =>
+    api.post(`/cases/${id}/suggest-articles`, undefined, {
+      params: limit ? { limit } : {},
+    }).then((r) => r.data),
+};
+
+// ── Knowledge Base (Wave 19h) ──────────────────────────────────────────────
+
+export const knowledgeApi = {
+  list: (p?: { search?: string; status?: string; category?: string; ownerId?: string; skip?: number; take?: number }) =>
+    api.get('/knowledge', { params: p }).then((r) => r.data),
+  get: (id: string) => api.get(`/knowledge/${id}`).then((r) => r.data),
+  create: (d: unknown) => api.post('/knowledge', d).then((r) => r.data),
+  update: (id: string, d: unknown) => api.patch(`/knowledge/${id}`, d).then((r) => r.data),
+  remove: (id: string) => api.delete(`/knowledge/${id}`).then((r) => r.data),
+  publish: (id: string) => api.post(`/knowledge/${id}/publish`).then((r) => r.data),
+  archive: (id: string) => api.post(`/knowledge/${id}/archive`).then((r) => r.data),
+  revertToDraft: (id: string) => api.post(`/knowledge/${id}/revert-to-draft`).then((r) => r.data),
+  view: (id: string) => api.post(`/knowledge/${id}/view`).then((r) => r.data),
+  helpful: (id: string) => api.post(`/knowledge/${id}/helpful`).then((r) => r.data),
+  notHelpful: (id: string) => api.post(`/knowledge/${id}/not-helpful`).then((r) => r.data),
+  search: (q: string, limit?: number) =>
+    api.get('/knowledge/search', { params: { q, limit } }).then((r) => r.data),
+};
+
+// ── SLA admin (Wave 19h) ───────────────────────────────────────────────────
+
+export const slaApi = {
+  listPolicies: () => api.get('/admin/sla-policies').then((r) => r.data),
+  getPolicy: (id: string) => api.get(`/admin/sla-policies/${id}`).then((r) => r.data),
+  createPolicy: (d: unknown) => api.post('/admin/sla-policies', d).then((r) => r.data),
+  updatePolicy: (id: string, d: unknown) => api.patch(`/admin/sla-policies/${id}`, d).then((r) => r.data),
+  deletePolicy: (id: string) => api.delete(`/admin/sla-policies/${id}`).then((r) => r.data),
+};
+
+export const entitlementApi = {
+  list: (p?: { accountId?: string; contactId?: string; status?: string }) =>
+    api.get('/admin/entitlements', { params: p }).then((r) => r.data),
+  get: (id: string) => api.get(`/admin/entitlements/${id}`).then((r) => r.data),
+  create: (d: unknown) => api.post('/admin/entitlements', d).then((r) => r.data),
+  update: (id: string, d: unknown) => api.patch(`/admin/entitlements/${id}`, d).then((r) => r.data),
+  remove: (id: string) => api.delete(`/admin/entitlements/${id}`).then((r) => r.data),
+};
+
 export const genericApi = {
   list: (objName: string, p?: Record<string, unknown>) => api.get(`/records/${objName}`, { params: p }).then(r => r.data),
   get: (objName: string, id: string) => api.get(`/records/${objName}/${id}`).then(r => r.data),
