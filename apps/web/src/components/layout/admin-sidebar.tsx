@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 import {
   Users, Settings,
   Workflow, Shield, LogOut, ArrowLeft, LayoutDashboard, Database, Mail, Sparkles, History, ShieldAlert,
+  UserSearch, Trash2, FileLock2, Webhook,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth';
 import { useRouter } from 'next/navigation';
@@ -28,6 +29,10 @@ const ADMIN_NAV: NavItem[] = [
   { label: '对象元数据', href: '/admin/metadata', icon: <Settings size={18} /> },
   { label: 'AI 用量监控', href: '/admin/ai-telemetry', icon: <Sparkles size={18} /> },
   { label: '操作审计日志', href: '/admin/audit-log', icon: <History size={18} /> },
+  { label: 'Customer 360', href: '/admin/persons', icon: <UserSearch size={18} /> },
+  { label: '回收站', href: '/admin/recycle-bin', icon: <Trash2 size={18} /> },
+  { label: 'GDPR 数据主体', href: '/admin/gdpr', icon: <FileLock2 size={18} /> },
+  { label: 'Webhook DLQ', href: '/admin/webhook-dlq', icon: <Webhook size={18} /> },
 ];
 
 export function AdminSidebar() {
