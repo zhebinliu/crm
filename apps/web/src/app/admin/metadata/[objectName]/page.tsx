@@ -230,9 +230,14 @@ export default function MetadataObjectPage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <Link href={`/admin/metadata/${objectName}/layout-editor`}>
+            <Link href={`/admin/objects/${objectName}/record-types`}>
               <Button variant="outline" className="border-slate-200 text-slate-600 hover:text-indigo-600 hover:border-indigo-200 h-11 px-5 font-bold rounded-xl gap-2">
-                <Layout size={15} /> 配置页面布局
+                <Tag size={15} /> 记录类型
+              </Button>
+            </Link>
+            <Link href={`/admin/objects/${objectName}/page-layouts`}>
+              <Button variant="outline" className="border-slate-200 text-slate-600 hover:text-indigo-600 hover:border-indigo-200 h-11 px-5 font-bold rounded-xl gap-2">
+                <Layout size={15} /> 页面布局
               </Button>
             </Link>
             <Button onClick={() => setShowAdd(!showAdd)} className="bg-brand hover:bg-brand-deep text-white shadow-lg shadow-brand/20 h-11 px-6 font-bold rounded-xl">
