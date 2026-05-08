@@ -9,6 +9,7 @@ import { OutboxService } from '../../common/outbox.service';
 import { EVENTS } from '@tokenwave/shared';
 import type { RequestUser } from '../../common/types/request-context';
 import { RecycleBinService } from '../recycle-bin/recycle-bin.service';
+import { FlsService } from '../fls/fls.service';
 
 export interface ContractListOptions {
   accountId?: string;
@@ -28,11 +29,12 @@ export class ContractService extends BaseEntityService {
     emitter: EventEmitter2,
     outbox: OutboxService,
     recycleBin: RecycleBinService,
+    private readonly fls: FlsService,
   ) {
     super(workflow, validation, audit, emitter, outbox, recycleBin);
   }
 
-  async list(tenantId: string, opts: ContractListOptions = {}) {
+  async list(tenantId: string, opts: ContractListOptions = {}, user?: RequestUser) {
     const { accountId, status, search, skip = 0, take = 20 } = opts;
 
     const where = {
@@ -54,19 +56,25 @@ export class ContractService extends BaseEntityService {
       this.prisma.contract.count({ where }),
     ]);
 
+    // Wave 16a: strip FLS-gated fields from each row.
+    await this.fls.filterReadableMany(user, 'contract', data as unknown as Record<string, unknown>[]);
     return { data, total };
   }
 
-  async get(tenantId: string, id: string) {
+  async get(tenantId: string, id: string, user?: RequestUser) {
     const contract = await this.prisma.contract.findFirst({
       where: { id, tenantId, deletedAt: null },
       include: { account: true },
     });
     if (!contract) throw new NotFoundException(`Contract ${id} not found`);
+    // Wave 16a: strip FLS-gated fields. No-op if user not provided.
+    await this.fls.filterReadable(user, 'contract', contract as unknown as Record<string, unknown>);
     return contract;
   }
 
   async create(tenantId: string, input: Record<string, unknown>, user: RequestUser) {
+    // Wave 16a: reject writes to fields the user lacks writePermission for.
+    await this.fls.assertWritable(user, 'contract', input);
     await this.beforeSave(tenantId, 'contract', input, undefined, user);
     const contractNumber = await this.nextContractNumber(tenantId);
 
@@ -92,6 +100,9 @@ export class ContractService extends BaseEntityService {
   }
 
   async update(tenantId: string, id: string, input: Record<string, unknown>, user: RequestUser) {
+    // Wave 16a: reject writes to fields the user lacks writePermission for.
+    await this.fls.assertWritable(user, 'contract', input);
+    // Internal previous-fetch — pass no user so we get the unfiltered record for diffing.
     const previous = await this.get(tenantId, id);
     await this.beforeSave(tenantId, 'contract', input, previous as Record<string, unknown>, user);
     const contract = await this.prisma.contract.update({

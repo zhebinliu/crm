@@ -59,14 +59,14 @@ export class CaseController {
 
   @Get()
   @RequirePermissions('case.read')
-  list(@TenantId() tid: string, @Query() q: ListCasesQuery) {
-    return this.svc.list(tid, q);
+  list(@TenantId() tid: string, @Query() q: ListCasesQuery, @CurrentUser() user: RequestUser) {
+    return this.svc.list(tid, q, user);
   }
 
   @Get(':id')
   @RequirePermissions('case.read')
-  get(@TenantId() tid: string, @Param('id') id: string) {
-    return this.svc.get(tid, id);
+  get(@TenantId() tid: string, @Param('id') id: string, @CurrentUser() user: RequestUser) {
+    return this.svc.get(tid, id, user);
   }
 
   @Post()
@@ -87,8 +87,8 @@ export class CaseController {
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @RequirePermissions('case.delete')
-  remove(@TenantId() tid: string, @Param('id') id: string) {
-    return this.svc.softDelete(tid, id);
+  remove(@TenantId() tid: string, @Param('id') id: string, @CurrentUser() user: RequestUser) {
+    return this.svc.softDelete(tid, id, user);
   }
 
   @Get(':id/comments')

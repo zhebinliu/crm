@@ -17,6 +17,8 @@ import { AuditService } from '../workflow/audit.service';
 import { OutboxService } from '../../common/outbox.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { RequestUser } from '../../common/types/request-context';
+import { RecycleBinService } from '../recycle-bin/recycle-bin.service';
+import { FlsService } from '../fls/fls.service';
 
 const RESPONSE_STATES: CampaignMemberStatus[] = ['CLICKED', 'RESPONDED', 'CONVERTED'];
 
@@ -29,11 +31,17 @@ export class CampaignService extends BaseEntityService {
     audit: AuditService,
     emitter: EventEmitter2,
     outbox: OutboxService,
+    recycleBin: RecycleBinService,
+    private readonly fls: FlsService,
   ) {
-    super(workflow, validation, audit, emitter, outbox);
+    super(workflow, validation, audit, emitter, outbox, recycleBin);
   }
 
-  async list(tenantId: string, opts: { status?: string; type?: string; ownerId?: string; skip?: number; take?: number } = {}) {
+  async list(
+    tenantId: string,
+    opts: { status?: string; type?: string; ownerId?: string; skip?: number; take?: number } = {},
+    user?: RequestUser,
+  ) {
     const { status, type, ownerId, skip = 0, take = 20 } = opts;
     const where = {
       tenantId, deletedAt: null,
@@ -51,19 +59,25 @@ export class CampaignService extends BaseEntityService {
       }),
       this.prisma.campaign.count({ where }),
     ]);
+    // Wave 16a: strip FLS-gated fields from each row.
+    await this.fls.filterReadableMany(user, 'campaign', data as unknown as Record<string, unknown>[]);
     return { data, total };
   }
 
-  async get(tenantId: string, id: string) {
+  async get(tenantId: string, id: string, user?: RequestUser) {
     const c = await this.prisma.campaign.findFirst({
       where: { id, tenantId, deletedAt: null },
       include: { owner: { select: { id: true, displayName: true } } },
     });
     if (!c) throw new NotFoundException(`Campaign ${id} not found`);
+    // Wave 16a: strip FLS-gated fields. No-op if user not provided.
+    await this.fls.filterReadable(user, 'campaign', c as unknown as Record<string, unknown>);
     return c;
   }
 
   async create(tenantId: string, input: Record<string, unknown>, user: RequestUser) {
+    // Wave 16a: reject writes to fields the user lacks writePermission for.
+    await this.fls.assertWritable(user, 'campaign', input);
     await this.beforeSave(tenantId, 'campaign', input, undefined, user);
     const data = {
       ...(input as Record<string, unknown>),
@@ -76,6 +90,9 @@ export class CampaignService extends BaseEntityService {
   }
 
   async update(tenantId: string, id: string, input: Record<string, unknown>, user: RequestUser) {
+    // Wave 16a: reject writes to fields the user lacks writePermission for.
+    await this.fls.assertWritable(user, 'campaign', input);
+    // Internal previous-fetch — pass no user so we get the unfiltered record for diffing.
     const previous = await this.get(tenantId, id);
     await this.beforeSave(tenantId, 'campaign', input, previous as Record<string, unknown>, user);
     const updated = await this.prisma.campaign.update({ where: { id }, data: input });
@@ -83,9 +100,10 @@ export class CampaignService extends BaseEntityService {
     return updated;
   }
 
-  async softDelete(tenantId: string, id: string) {
-    await this.get(tenantId, id);
+  async softDelete(tenantId: string, id: string, user?: RequestUser) {
+    const previous = await this.get(tenantId, id);
     await this.prisma.campaign.update({ where: { id }, data: { deletedAt: new Date() } });
+    await this.afterSoftDelete(tenantId, 'campaign', previous as Record<string, unknown>, user);
   }
 
   // ── Members ──────────────────────────────────────────────────────────────

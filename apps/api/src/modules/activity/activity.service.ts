@@ -11,6 +11,7 @@ import type { RequestUser } from '../../common/types/request-context';
 import { ActivityType, ActivityStatus } from '@prisma/client';
 import { RecycleBinService } from '../recycle-bin/recycle-bin.service';
 import { EmbeddingService, activityContent } from '../embeddings/embedding.service';
+import { FlsService } from '../fls/fls.service';
 
 export interface ActivityListOptions {
   ownerId?: string;
@@ -35,6 +36,7 @@ export class ActivityService extends BaseEntityService {
     recycleBin: RecycleBinService,
     private readonly ai: AiService,
     embeddings: EmbeddingService,
+    private readonly fls: FlsService,
   ) {
     super(workflow, validation, audit, emitter, outbox, recycleBin);
     this.embeddings = embeddings;
@@ -56,7 +58,7 @@ export class ActivityService extends BaseEntityService {
     });
   }
 
-  async list(tenantId: string, opts: ActivityListOptions = {}) {
+  async list(tenantId: string, opts: ActivityListOptions = {}, user?: RequestUser) {
     const { ownerId, targetType, targetId, status, type, dueBefore, skip = 0, take = 20 } = opts;
 
     const where = {
@@ -83,19 +85,25 @@ export class ActivityService extends BaseEntityService {
       this.prisma.activity.count({ where }),
     ]);
 
+    // Wave 16a: strip FLS-gated fields from each row.
+    await this.fls.filterReadableMany(user, 'activity', data as unknown as Record<string, unknown>[]);
     return { data, total };
   }
 
-  async get(tenantId: string, id: string) {
+  async get(tenantId: string, id: string, user?: RequestUser) {
     const activity = await this.prisma.activity.findFirst({
       where: { id, tenantId, deletedAt: null },
       include: { owner: { select: { id: true, displayName: true, email: true } } },
     });
     if (!activity) throw new NotFoundException(`Activity ${id} not found`);
+    // Wave 16a: strip FLS-gated fields. No-op if user not provided.
+    await this.fls.filterReadable(user, 'activity', activity as unknown as Record<string, unknown>);
     return activity;
   }
 
   async create(tenantId: string, input: Record<string, unknown>, user: RequestUser) {
+    // Wave 16a: reject writes to fields the user lacks writePermission for.
+    await this.fls.assertWritable(user, 'activity', input);
     await this.beforeSave(tenantId, 'activity', input, undefined, user);
 
     const data = {
@@ -116,6 +124,9 @@ export class ActivityService extends BaseEntityService {
   }
 
   async update(tenantId: string, id: string, input: Record<string, unknown>, user: RequestUser) {
+    // Wave 16a: reject writes to fields the user lacks writePermission for.
+    await this.fls.assertWritable(user, 'activity', input);
+    // Internal previous-fetch — pass no user so we get the unfiltered record for diffing.
     const previous = await this.get(tenantId, id);
     await this.beforeSave(tenantId, 'activity', input, previous as Record<string, unknown>, user);
 

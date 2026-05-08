@@ -66,11 +66,15 @@ export class CampaignController {
 
   @Get()
   @RequirePermissions('campaign.read')
-  list(@TenantId() tid: string, @Query() q: ListCampaignsQuery) { return this.svc.list(tid, q); }
+  list(@TenantId() tid: string, @Query() q: ListCampaignsQuery, @CurrentUser() user: RequestUser) {
+    return this.svc.list(tid, q, user);
+  }
 
   @Get(':id')
   @RequirePermissions('campaign.read')
-  get(@TenantId() tid: string, @Param('id') id: string) { return this.svc.get(tid, id); }
+  get(@TenantId() tid: string, @Param('id') id: string, @CurrentUser() user: RequestUser) {
+    return this.svc.get(tid, id, user);
+  }
 
   @Post()
   @RequirePermissions('campaign.write')
@@ -87,7 +91,9 @@ export class CampaignController {
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @RequirePermissions('campaign.delete')
-  remove(@TenantId() tid: string, @Param('id') id: string) { return this.svc.softDelete(tid, id); }
+  remove(@TenantId() tid: string, @Param('id') id: string, @CurrentUser() user: RequestUser) {
+    return this.svc.softDelete(tid, id, user);
+  }
 
   // Members
   @Get(':id/members')

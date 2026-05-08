@@ -36,7 +36,7 @@ export class ActivityResolver {
       targetId,
       skip,
       take,
-    });
+    }, user);
     return { data: res.data, total: res.total };
   }
 
@@ -46,7 +46,7 @@ export class ActivityResolver {
     @GqlCurrentUser() user: RequestUser,
     @Args('id', { type: () => ID }) id: string,
   ) {
-    return this.activities.get(user.tenantId, id);
+    return this.activities.get(user.tenantId, id, user);
   }
 
   @Mutation(() => Activity)
@@ -84,7 +84,7 @@ export class ActivityResolver {
     @GqlCurrentUser() user: RequestUser,
     @Args('id', { type: () => ID }) id: string,
   ) {
-    await this.activities.softDelete(user.tenantId, id);
+    await this.activities.softDelete(user.tenantId, id, user);
     return true;
   }
 }
