@@ -74,6 +74,10 @@ model Tenant {
   dashboardComponents DashboardComponent[]
   productBundles      ProductBundle[]
   priceTiers          PriceTier[]
+  territories                Territory[]
+  userTerritories            UserTerritory[]
+  accountTerritories         AccountTerritory[]
+  territoryAssignmentRules   TerritoryAssignmentRule[]
 
   @@map("tenants")
 }
@@ -221,6 +225,7 @@ model User {
   recordShares          RecordShare[]         @relation("RecordShareUser")
   ownedCases            Case[]                @relation("CaseOwner")
   ownedCampaigns        Campaign[]            @relation("CampaignOwner")
+  userTerritories       UserTerritory[]       @relation("UserTerritoryRel")
   mfa                   UserMfaSecret?
 
   @@unique([tenantId, email])
@@ -595,6 +600,7 @@ model Account {
   orders        Order[]
   contracts     Contract[]
   cases         Case[]
+  territories   AccountTerritory[]
 
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -2125,4 +2131,92 @@ model PriceTier {
 
   @@index([tenantId, productId, minQuantity])
   @@map("price_tiers")
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// TERRITORY MANAGEMENT — SF-style hierarchical territories (Wave 19f)
+// ════════════════════════════════════════════════════════════════════════════
+// Enterprise sales orgs assign reps not just by individual ownership but by
+// territory. Territories are hierarchical, can have multiple owners, and
+// assignment rules auto-route Accounts to territories based on attributes
+// (country, industry, revenue band, etc).
+
+model Territory {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  apiName      String
+  label        String
+  description  String?
+  parentId     String?
+  parent       Territory? @relation("TerritoryParent", fields: [parentId], references: [id], onDelete: SetNull)
+  children     Territory[] @relation("TerritoryParent")
+  isActive     Boolean  @default(true)
+  // Type discriminator: "geographic" | "industry" | "named_account" | "other"
+  type         String   @default("geographic")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  members      UserTerritory[]
+  accounts     AccountTerritory[]
+  rules        TerritoryAssignmentRule[]
+  @@unique([tenantId, apiName])
+  @@index([tenantId, parentId])
+  @@map("territories")
+}
+
+model UserTerritory {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User     @relation("UserTerritoryRel", fields: [userId], references: [id], onDelete: Cascade)
+  territoryId  String
+  territory    Territory @relation(fields: [territoryId], references: [id], onDelete: Cascade)
+  // Role in the territory: "owner" | "rep" | "manager" | "view_only"
+  roleInTerritory String  @default("rep")
+  isPrimary    Boolean  @default(false)  // exactly one primary per user (the "home" territory)
+  createdAt    DateTime @default(now())
+  @@unique([userId, territoryId])
+  @@index([territoryId])
+  @@map("user_territories")
+}
+
+model AccountTerritory {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  accountId    String
+  account      Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  territoryId  String
+  territory    Territory @relation(fields: [territoryId], references: [id], onDelete: Cascade)
+  // "auto" (set by rule) | "manual" (set by admin) | "inherited" (from parent)
+  source       String   @default("auto")
+  isPrimary    Boolean  @default(false)
+  assignedAt   DateTime @default(now())
+  @@unique([accountId, territoryId])
+  @@index([territoryId])
+  @@map("account_territories")
+}
+
+model TerritoryAssignmentRule {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  territoryId  String
+  territory    Territory @relation(fields: [territoryId], references: [id], onDelete: Cascade)
+  name         String
+  description  String?
+  // SOQL-like predicate evaluated against Account record. Examples:
+  //   { field: "billingCountry", op: "in", value: ["CN","HK"] }
+  //   { field: "industry", op: "=", value: "fintech" }
+  // Stored as JSON; evaluated by the assignment service.
+  conditions   Json     @default("[]")
+  // Combine: "all" (AND) or "any" (OR)
+  matchType    String   @default("all")
+  priority     Int      @default(100)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  @@index([tenantId, territoryId, isActive, priority])
+  @@map("territory_assignment_rules")
 }

@@ -19,9 +19,10 @@
 // short-lived in-memory map keyed by userId so a single request doing 10
 // queries doesn't re-walk the role tree.
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { hasPermission } from '@tokenwave/shared';
+import { TerritoryService } from '../territory/territory.service';
 
 export interface SharingContext {
   tenantId: string;
@@ -42,7 +43,13 @@ export class SharingService {
   private readonly log = new Logger(SharingService.name);
   private readonly subordinatesCache = new Map<string, CacheEntry>();
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    // Wave 19f: optional. If TerritoryModule is loaded (it is), this is wired
+    // and visibility unions in territory-derived account access. If not, the
+    // service degrades to the original owner+share logic.
+    @Optional() private readonly territories?: TerritoryService,
+  ) {}
 
   /**
    * The main API. Returns a Prisma where fragment that, when spread into a
@@ -79,6 +86,29 @@ export class SharingService {
       branches.push({ tenantId: ctx.tenantId, id: { in: sharedIds } });
     }
 
+    // Wave 19f: territory-derived visibility. Strictly additive — anything
+    // already visible stays visible.
+    //   recordType === 'account'              → id IN (territoryAccounts)
+    //   recordType IN {opportunity,quote,...} → accountId IN (territoryAccounts)
+    if (this.territories) {
+      const territoryAccountIds = await this.territories.accountsForUser(ctx.userId);
+      if (territoryAccountIds.size > 0) {
+        const ids = Array.from(territoryAccountIds);
+        if (recordType === 'account') {
+          branches.push({ tenantId: ctx.tenantId, id: { in: ids } });
+        } else if (
+          recordType === 'opportunity' ||
+          recordType === 'quote' ||
+          recordType === 'order' ||
+          recordType === 'contract' ||
+          recordType === 'contact' ||
+          recordType === 'case'
+        ) {
+          branches.push({ tenantId: ctx.tenantId, accountId: { in: ids } });
+        }
+      }
+    }
+
     return { OR: branches };
   }
 
@@ -97,7 +127,13 @@ export class SharingService {
     const subs = await this.subordinateUserIds(ctx.tenantId, ctx.userId);
     if (ownerId && subs.has(ownerId)) return true;
     const shared = await this.sharedRecordIds(ctx.tenantId, ctx.userId, recordType);
-    return shared.includes(recordId);
+    if (shared.includes(recordId)) return true;
+    // Wave 19f: territory access for account-anchored objects.
+    if (this.territories && recordType === 'account') {
+      const ids = await this.territories.accountsForUser(ctx.userId);
+      if (ids.has(recordId)) return true;
+    }
+    return false;
   }
 
   /**
