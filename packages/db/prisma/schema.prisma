@@ -80,6 +80,9 @@ model Tenant {
   territoryAssignmentRules   TerritoryAssignmentRule[]
   recordTypes         RecordType[]
   pageLayouts         PageLayout[]
+  orgWideDefaults     OrgWideDefault[]
+  publicGroups        PublicGroup[]
+  queues              Queue[]
 
   @@map("tenants")
 }
@@ -298,22 +301,25 @@ enum ShareAccessLevel {
 }
 
 model RecordShare {
-  id          String           @id @default(cuid())
-  tenantId    String
-  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  recordType  String // "lead" | "account" | "opportunity" | ...
-  recordId    String
-  // User this row grants access to
-  userId      String
-  user        User             @relation("RecordShareUser", fields: [userId], references: [id], onDelete: Cascade)
-  accessLevel ShareAccessLevel @default(READ)
+  id           String           @id @default(cuid())
+  tenantId     String
+  tenant       Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  recordType   String           // "lead" | "account" | "opportunity" | ...
+  recordId     String
+  // Grantee — at-least-one of userId / groupId must be set (enforced at service layer).
+  userId       String?
+  user         User?            @relation("RecordShareUser", fields: [userId], references: [id], onDelete: Cascade)
+  groupId      String?
+  group        PublicGroup?     @relation("GroupShare", fields: [groupId], references: [id], onDelete: Cascade)
+  accessLevel  ShareAccessLevel @default(READ)
   // "manual" | "rule:<ruleId>" | "team" — provenance of this share
   reason      String           @default("manual")
   createdAt   DateTime         @default(now())
   createdById String?
 
-  @@unique([tenantId, recordType, recordId, userId])
+  @@unique([tenantId, recordType, recordId, userId, groupId])
   @@index([tenantId, userId, recordType])
+  @@index([tenantId, groupId, recordType])
   @@index([tenantId, recordType, recordId])
   @@map("record_shares")
 }
@@ -562,6 +568,12 @@ model Lead {
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   ownerId  String
   owner    User   @relation("LeadOwner", fields: [ownerId], references: [id])
+  // SF-style polymorphic owner: when a queue holds the record, queueId is set.
+  // Service code interprets ownership as `queueId ?? ownerId`. ownerId stays
+  // non-null in v1 for type safety (defaulting to a system "queue placeholder"
+  // user is acceptable; future: drop NOT NULL and use a true polymorphic FK).
+  queueId  String?
+  queue    Queue?  @relation("LeadQueue", fields: [queueId], references: [id], onDelete: SetNull)
 
   // Customer 360: link to the canonical Person identity (set on create/update
   // by IdentityResolutionService). Optional because IdentityRule may surface
@@ -1254,8 +1266,13 @@ model Case {
   firstResponseAt DateTime?
   resolvedAt      DateTime?
 
-  ownerId   String
-  owner     User     @relation("CaseOwner", fields: [ownerId], references: [id])
+  ownerId      String
+  owner        User         @relation("CaseOwner", fields: [ownerId], references: [id])
+  // SF-style polymorphic owner — see Lead.queueId. When queueId is set, the
+  // record is "in the queue"; service code treats `queueId ?? ownerId` as
+  // the effective owner for visibility/routing purposes.
+  queueId      String?
+  queue        Queue?       @relation("CaseQueue", fields: [queueId], references: [id], onDelete: SetNull)
   // Polymorphic-ish relations to standard CRM objects
   accountId String?
   account   Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
@@ -2292,4 +2309,88 @@ model TerritoryAssignmentRule {
   updatedAt    DateTime @updatedAt
   @@index([tenantId, territoryId, isActive, priority])
   @@map("territory_assignment_rules")
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// SHARING — Org-Wide Defaults, Public Groups, Queues (Wave 19c)
+// ════════════════════════════════════════════════════════════════════════════
+// Salesforce-style sharing primitives layered on top of RecordShare:
+//   • OrgWideDefault: per-object baseline ("private" | "public_read" | "public_read_write")
+//   • PublicGroup: named groups of users/roles, usable as a share grantee
+//   • Queue: assignment queue for unowned work; backed by a PublicGroup of
+//     who can claim items from it. Lead.queueId / Case.queueId mark records
+//     currently sitting in a queue; effective ownership is `queueId ?? ownerId`.
+// ════════════════════════════════════════════════════════════════════════════
+
+model OrgWideDefault {
+  id              String   @id @default(cuid())
+  tenantId        String
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  objectApiName   String   // "lead" | "account" | "opportunity" | ...
+  // "private" | "public_read" | "public_read_write"
+  internalSharing String   @default("public_read_write")
+  // future: external community defaults — keep nullable
+  externalSharing String?
+  // Grant-by-hierarchy is a separate toggle in SF; default true (subordinates'
+  // records visible to managers).
+  grantHierarchy  Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([tenantId, objectApiName])
+  @@map("org_wide_defaults")
+}
+
+model PublicGroup {
+  id           String              @id @default(cuid())
+  tenantId     String
+  tenant       Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  apiName      String              // tenant-unique e.g. "sales_emea"
+  label        String
+  description  String?
+  isActive     Boolean             @default(true)
+  members      PublicGroupMember[]
+  recordShares RecordShare[]       @relation("GroupShare")
+  queues       Queue[]
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  @@unique([tenantId, apiName])
+  @@map("public_groups")
+}
+
+model PublicGroupMember {
+  id        String      @id @default(cuid())
+  groupId   String
+  group     PublicGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  // Member is either a User OR a Role (transitively all users in that role).
+  // SF supports nested groups too; v1 keeps it 2-level.
+  userId    String?
+  roleId    String?
+  // future: nestedGroupId for group-of-groups
+  createdAt DateTime    @default(now())
+
+  @@unique([groupId, userId, roleId])
+  @@index([groupId])
+  @@map("public_group_members")
+}
+
+model Queue {
+  id               String       @id @default(cuid())
+  tenantId         String
+  tenant           Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  apiName          String       // "unassigned_leads"
+  label            String
+  // Which objects can be assigned to this queue
+  supportedObjects String[]
+  // Members who can claim items from this queue. Modeled via a PublicGroup link.
+  groupId          String?
+  group            PublicGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  leads            Lead[]       @relation("LeadQueue")
+  cases            Case[]       @relation("CaseQueue")
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@unique([tenantId, apiName])
+  @@map("queues")
 }

@@ -23,6 +23,8 @@ import { Injectable, Logger, Optional } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { hasPermission } from '@tokenwave/shared';
 import { TerritoryService } from '../territory/territory.service';
+import { OrgWideDefaultsService } from './owd.service';
+import { PublicGroupService } from './public-group.service';
 
 export interface SharingContext {
   tenantId: string;
@@ -45,6 +47,8 @@ export class SharingService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly owd: OrgWideDefaultsService,
+    private readonly groups: PublicGroupService,
     // Wave 19f: optional. If TerritoryModule is loaded (it is), this is wired
     // and visibility unions in territory-derived account access. If not, the
     // service degrades to the original owner+share logic.
@@ -71,14 +75,27 @@ export class SharingService {
       return { tenantId: ctx.tenantId };
     }
 
-    const subordinateIds = await this.subordinateUserIds(ctx.tenantId, ctx.userId);
+    // OWD baseline. When unset, defaults to public_read_write (legacy behavior).
+    const owd = await this.owd.get(ctx.tenantId, recordType);
+    if (
+      owd.internalSharing === 'public_read_write' ||
+      owd.internalSharing === 'public_read'
+    ) {
+      // Both internal sharing levels allow tenant-wide VISIBILITY; the
+      // read-vs-edit distinction is enforced by callers using
+      // OrgWideDefaultsService.evaluateAccess() at write time.
+      return { tenantId: ctx.tenantId };
+    }
+
+    // private: only owner + role-hierarchy + RecordShare (direct user OR via
+    // PublicGroup membership).
+    const subordinateIds = owd.grantHierarchy
+      ? await this.subordinateUserIds(ctx.tenantId, ctx.userId)
+      : new Set<string>();
     const sharedIds = await this.sharedRecordIds(ctx.tenantId, ctx.userId, recordType);
 
     const visibleOwnerIds = new Set<string>([ctx.userId, ...subordinateIds]);
 
-    // OR branch:
-    //  - ownerId in {self + subordinates}
-    //  - id in {shared records}
     const branches: Record<string, unknown>[] = [
       { tenantId: ctx.tenantId, [ownerField]: { in: Array.from(visibleOwnerIds) } },
     ];
@@ -124,8 +141,18 @@ export class SharingService {
   ): Promise<boolean> {
     if (this.canSeeAll(ctx, recordType)) return true;
     if (ownerId === ctx.userId) return true;
-    const subs = await this.subordinateUserIds(ctx.tenantId, ctx.userId);
-    if (ownerId && subs.has(ownerId)) return true;
+    // OWD baseline: when not strictly private, everyone in tenant sees it.
+    const owd = await this.owd.get(ctx.tenantId, recordType);
+    if (
+      owd.internalSharing === 'public_read_write' ||
+      owd.internalSharing === 'public_read'
+    ) {
+      return true;
+    }
+    if (owd.grantHierarchy && ownerId) {
+      const subs = await this.subordinateUserIds(ctx.tenantId, ctx.userId);
+      if (subs.has(ownerId)) return true;
+    }
     const shared = await this.sharedRecordIds(ctx.tenantId, ctx.userId, recordType);
     if (shared.includes(recordId)) return true;
     // Wave 19f: territory access for account-anchored objects.
@@ -137,36 +164,56 @@ export class SharingService {
   }
 
   /**
-   * Manually share a record with a user (e.g. team handoff). Idempotent;
-   * upserts. Records the actor in `createdById`.
+   * Manually share a record. Grantee is either a user OR a PublicGroup —
+   * exactly one of `granteeUserId` / `granteeGroupId` must be set
+   * (enforced here at the service layer; the schema's compound unique
+   * key allows but doesn't require this).
    */
   async shareRecord(args: {
     tenantId: string;
     actorId: string;
     recordType: string;
     recordId: string;
-    granteeUserId: string;
+    granteeUserId?: string | null;
+    granteeGroupId?: string | null;
     accessLevel?: 'READ' | 'EDIT';
     reason?: string;
   }) {
-    return this.prisma.recordShare.upsert({
+    const userId = args.granteeUserId ?? null;
+    const groupId = args.granteeGroupId ?? null;
+    if (!userId && !groupId) {
+      throw new Error('shareRecord: granteeUserId OR granteeGroupId is required');
+    }
+    if (userId && groupId) {
+      throw new Error('shareRecord: provide exactly one of granteeUserId / granteeGroupId');
+    }
+    // Find existing share row; we can't use the compound unique because one
+    // of (userId, groupId) is always null which Prisma can't index on.
+    const existing = await this.prisma.recordShare.findFirst({
       where: {
-        tenantId_recordType_recordId_userId: {
-          tenantId: args.tenantId,
-          recordType: args.recordType,
-          recordId: args.recordId,
-          userId: args.granteeUserId,
-        },
-      },
-      update: {
-        accessLevel: args.accessLevel ?? 'READ',
-        reason: args.reason ?? 'manual',
-      },
-      create: {
         tenantId: args.tenantId,
         recordType: args.recordType,
         recordId: args.recordId,
-        userId: args.granteeUserId,
+        userId,
+        groupId,
+      },
+    });
+    if (existing) {
+      return this.prisma.recordShare.update({
+        where: { id: existing.id },
+        data: {
+          accessLevel: args.accessLevel ?? 'READ',
+          reason: args.reason ?? 'manual',
+        },
+      });
+    }
+    return this.prisma.recordShare.create({
+      data: {
+        tenantId: args.tenantId,
+        recordType: args.recordType,
+        recordId: args.recordId,
+        userId,
+        groupId,
         accessLevel: args.accessLevel ?? 'READ',
         reason: args.reason ?? 'manual',
         createdById: args.actorId,
@@ -174,17 +221,32 @@ export class SharingService {
     });
   }
 
-  async revokeShare(tenantId: string, recordType: string, recordId: string, granteeUserId: string) {
+  async revokeShare(
+    tenantId: string,
+    recordType: string,
+    recordId: string,
+    granteeUserId?: string | null,
+    granteeGroupId?: string | null,
+  ) {
     await this.prisma.recordShare.deleteMany({
-      where: { tenantId, recordType, recordId, userId: granteeUserId },
+      where: {
+        tenantId,
+        recordType,
+        recordId,
+        userId: granteeUserId ?? null,
+        groupId: granteeGroupId ?? null,
+      },
     });
   }
 
-  /** List all explicit shares on a single record. */
+  /** List all explicit shares on a single record (user or group grantee). */
   listSharesForRecord(tenantId: string, recordType: string, recordId: string) {
     return this.prisma.recordShare.findMany({
       where: { tenantId, recordType, recordId },
-      include: { user: { select: { id: true, displayName: true, email: true } } },
+      include: {
+        user: { select: { id: true, displayName: true, email: true } },
+        group: { select: { id: true, apiName: true, label: true } },
+      },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -273,11 +335,23 @@ export class SharingService {
   }
 
   private async sharedRecordIds(tenantId: string, userId: string, recordType: string): Promise<string[]> {
-    const shares = await this.prisma.recordShare.findMany({
+    // Direct user shares...
+    const direct = await this.prisma.recordShare.findMany({
       where: { tenantId, userId, recordType },
       select: { recordId: true },
       take: 5000,
     });
-    return shares.map((s) => s.recordId);
+    // ...plus shares granted to any PublicGroup the user belongs to.
+    const groupIds = await this.groups.groupsForUser(tenantId, userId);
+    let viaGroup: { recordId: string }[] = [];
+    if (groupIds.length > 0) {
+      viaGroup = await this.prisma.recordShare.findMany({
+        where: { tenantId, recordType, groupId: { in: groupIds } },
+        select: { recordId: true },
+        take: 5000,
+      });
+    }
+    const out = new Set<string>([...direct.map((s) => s.recordId), ...viaGroup.map((s) => s.recordId)]);
+    return Array.from(out);
   }
 }
