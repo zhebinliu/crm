@@ -1056,7 +1056,19 @@ model Attachment {
   targetId    String
   createdAt   DateTime @default(now())
 
+  // ─── Production storage fields (Wave 18c) ────────────────────────────────
+  storageBackend   String   @default("s3")     // "s3" | "local"
+  storageKey       String?                     // object key in bucket / disk path
+  sizeBytes        Int?                        // canonical size in bytes (mirror of `size` long-term)
+  checksum         String?                     // SHA-256 hex
+  uploadedById     String?                     // user who triggered presign
+  uploadedAt       DateTime?                   // set on confirm
+  virusScanStatus  String?  @default("pending") // pending | clean | infected | skipped
+  status           String?  @default("pending") // pending | uploaded | confirmed | deleted
+  deletedAt        DateTime?
+
   @@index([tenantId, targetType, targetId])
+  @@index([tenantId, status])
   @@map("attachments")
 }
 
