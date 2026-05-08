@@ -66,8 +66,33 @@ model Tenant {
   persons             Person[]
   recycleBinEntries   RecycleBinEntry[]
   recordEmbeddings    RecordEmbedding[]
+  fieldHistory        FieldHistory[]
 
   @@map("tenants")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// FIELD HISTORY (Wave 18b)
+// ─────────────────────────────────────────────────────────────────────────
+// Salesforce-style field-level history. Captures every changed field on a
+// record, independent from `audit_logs` (which tail-trim eventually). This
+// table survives soft-deletes and recycle-bin purges so compliance can
+// answer "what was the close_date of opp X 6 months ago".
+
+model FieldHistory {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  recordType  String
+  recordId    String
+  fieldName   String
+  fromValue   Json?
+  toValue     Json?
+  changedAt   DateTime @default(now())
+  changedById String?
+
+  @@index([tenantId, recordType, recordId, fieldName, changedAt])
+  @@map("field_history")
 }
 
 // ─────────────────────────────────────────────────────────────────────────

@@ -56,7 +56,15 @@ export class WorkflowService {
       if (rule.runSync) {
         await this.executeRule(rule, ctx);
       } else {
-        await this.queue.add('run-rule', { ruleId: rule.id, ctx }, { priority: rule.priority });
+        // Wave 18b1: tag jobs with tenantId so per-tenant fairness can be
+        // enforced downstream (rate-limiting, observability, future
+        // per-tenant queue split). The processor reads `data.tenantId`.
+        // Job name is also prefixed with the tenant for easy log filtering.
+        await this.queue.add(
+          `run-rule:${ctx.tenantId}`,
+          { tenantId: ctx.tenantId, ruleId: rule.id, ctx },
+          { priority: rule.priority },
+        );
       }
     }
   }
