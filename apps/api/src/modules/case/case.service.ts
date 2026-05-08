@@ -19,6 +19,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { RequestUser } from '../../common/types/request-context';
 import { RecycleBinService } from '../recycle-bin/recycle-bin.service';
 import { EmbeddingService, caseContent } from '../embeddings/embedding.service';
+import { FlsService } from '../fls/fls.service';
 
 export interface CaseListOptions {
   search?: string;
@@ -43,6 +44,7 @@ export class CaseService extends BaseEntityService {
     outbox: OutboxService,
     recycleBin: RecycleBinService,
     embeddings: EmbeddingService,
+    private readonly fls: FlsService,
   ) {
     super(workflow, validation, audit, emitter, outbox, recycleBin);
     this.embeddings = embeddings;
@@ -64,7 +66,7 @@ export class CaseService extends BaseEntityService {
     });
   }
 
-  async list(tenantId: string, opts: CaseListOptions = {}) {
+  async list(tenantId: string, opts: CaseListOptions = {}, user?: RequestUser) {
     const { search, status, priority, ownerId, accountId, contactId, source, skip = 0, take = 20 } = opts;
     const where = {
       tenantId,
@@ -88,10 +90,12 @@ export class CaseService extends BaseEntityService {
       }),
       this.prisma.case.count({ where }),
     ]);
+    // Wave 16a: strip FLS-gated fields from each row.
+    await this.fls.filterReadableMany(user, 'case', data as unknown as Record<string, unknown>[]);
     return { data, total };
   }
 
-  async get(tenantId: string, id: string) {
+  async get(tenantId: string, id: string, user?: RequestUser) {
     const c = await this.prisma.case.findFirst({
       where: { id, tenantId, deletedAt: null },
       include: {
@@ -102,10 +106,14 @@ export class CaseService extends BaseEntityService {
       },
     });
     if (!c) throw new NotFoundException(`Case ${id} not found`);
+    // Wave 16a: strip FLS-gated fields. No-op if user not provided.
+    await this.fls.filterReadable(user, 'case', c as unknown as Record<string, unknown>);
     return c;
   }
 
   async create(tenantId: string, input: Record<string, unknown>, user: RequestUser) {
+    // Wave 16a: reject writes to fields the user lacks writePermission for.
+    await this.fls.assertWritable(user, 'case', input);
     await this.beforeSave(tenantId, 'case', input, undefined, user);
     const caseNumber = await this.nextCaseNumber(tenantId);
 
@@ -124,6 +132,9 @@ export class CaseService extends BaseEntityService {
   }
 
   async update(tenantId: string, id: string, input: Record<string, unknown>, user: RequestUser) {
+    // Wave 16a: reject writes to fields the user lacks writePermission for.
+    await this.fls.assertWritable(user, 'case', input);
+    // Internal previous-fetch — pass no user so we get the unfiltered record for diffing.
     const previous = await this.get(tenantId, id);
     await this.beforeSave(tenantId, 'case', input, previous as Record<string, unknown>, user);
 

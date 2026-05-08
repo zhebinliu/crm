@@ -77,14 +77,22 @@ export class ActivityController {
 
   @Get()
   @RequirePermissions('activity.read')
-  list(@TenantId() tenantId: string, @Query() query: ListActivitiesQuery) {
-    return this.service.list(tenantId, query);
+  list(
+    @TenantId() tenantId: string,
+    @Query() query: ListActivitiesQuery,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.service.list(tenantId, query, user);
   }
 
   @Get(':id')
   @RequirePermissions('activity.read')
-  get(@TenantId() tenantId: string, @Param('id') id: string) {
-    return this.service.get(tenantId, id);
+  get(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.service.get(tenantId, id, user);
   }
 
   @Post()
@@ -111,8 +119,12 @@ export class ActivityController {
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @RequirePermissions('activity.write')
-  softDelete(@TenantId() tenantId: string, @Param('id') id: string) {
-    return this.service.softDelete(tenantId, id);
+  softDelete(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.service.softDelete(tenantId, id, user);
   }
 
   @Post(':id/complete')

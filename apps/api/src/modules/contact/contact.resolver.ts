@@ -30,7 +30,7 @@ export class ContactResolver {
       ownerId,
       skip,
       take,
-    });
+    } as any, user);
     return { data: res.data, total: res.total };
   }
 
@@ -40,7 +40,7 @@ export class ContactResolver {
     @GqlCurrentUser() user: RequestUser,
     @Args('id', { type: () => ID }) id: string,
   ) {
-    return this.contacts.get(user.tenantId, id);
+    return this.contacts.get(user.tenantId, id, user);
   }
 
   @Mutation(() => Contact)
@@ -68,7 +68,7 @@ export class ContactResolver {
     @GqlCurrentUser() user: RequestUser,
     @Args('id', { type: () => ID }) id: string,
   ) {
-    await this.contacts.softDelete(user.tenantId, id);
+    await this.contacts.softDelete(user.tenantId, id, user);
     return true;
   }
 }

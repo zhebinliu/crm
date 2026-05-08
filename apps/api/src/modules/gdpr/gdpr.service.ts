@@ -22,7 +22,7 @@ export interface GdprExportBundle {
   bundleId: string;
   generatedAt: string;
   subject: {
-    sourceRecordType: 'lead' | 'contact';
+    sourceRecordType: 'person' | 'lead' | 'contact';
     sourceRecordId: string;
     email: string | null;
     lastName: string | null;

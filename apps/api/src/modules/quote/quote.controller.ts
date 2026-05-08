@@ -76,14 +76,18 @@ export class QuoteController {
 
   @Get()
   @RequirePermissions('quote.read')
-  list(@TenantId() tenantId: string, @Query() query: ListQuotesQuery) {
-    return this.service.list(tenantId, query);
+  list(
+    @TenantId() tenantId: string,
+    @Query() query: ListQuotesQuery,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.service.list(tenantId, query, user);
   }
 
   @Get(':id')
   @RequirePermissions('quote.read')
-  get(@TenantId() tenantId: string, @Param('id') id: string) {
-    return this.service.get(tenantId, id);
+  get(@TenantId() tenantId: string, @Param('id') id: string, @CurrentUser() user: RequestUser) {
+    return this.service.get(tenantId, id, user);
   }
 
   @Post()

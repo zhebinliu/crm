@@ -69,14 +69,18 @@ export class OrderController {
 
   @Get()
   @RequirePermissions('order.read')
-  list(@TenantId() tenantId: string, @Query() query: ListOrdersQuery) {
-    return this.service.list(tenantId, query);
+  list(
+    @TenantId() tenantId: string,
+    @Query() query: ListOrdersQuery,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.service.list(tenantId, query, user);
   }
 
   @Get(':id')
   @RequirePermissions('order.read')
-  get(@TenantId() tenantId: string, @Param('id') id: string) {
-    return this.service.get(tenantId, id);
+  get(@TenantId() tenantId: string, @Param('id') id: string, @CurrentUser() user: RequestUser) {
+    return this.service.get(tenantId, id, user);
   }
 
   @Post()

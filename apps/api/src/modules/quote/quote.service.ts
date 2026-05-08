@@ -9,6 +9,7 @@ import { AuditService } from '../workflow/audit.service';
 import { OutboxService } from '../../common/outbox.service';
 import type { RequestUser } from '../../common/types/request-context';
 import { RecycleBinService } from '../recycle-bin/recycle-bin.service';
+import { FlsService } from '../fls/fls.service';
 
 export interface QuoteListOptions {
   opportunityId?: string;
@@ -37,11 +38,12 @@ export class QuoteService extends BaseEntityService {
     emitter: EventEmitter2,
     outbox: OutboxService,
     recycleBin: RecycleBinService,
+    private readonly fls: FlsService,
   ) {
     super(workflow, validation, audit, emitter, outbox, recycleBin);
   }
 
-  async list(tenantId: string, opts: QuoteListOptions = {}) {
+  async list(tenantId: string, opts: QuoteListOptions = {}, user?: RequestUser) {
     const { opportunityId, accountId, status, skip = 0, take = 20 } = opts;
 
     const where = {
@@ -67,10 +69,11 @@ export class QuoteService extends BaseEntityService {
       this.prisma.quote.count({ where }),
     ]);
 
+    await this.fls.filterReadableMany(user, 'quote', data as unknown as Record<string, unknown>[]);
     return { data, total };
   }
 
-  async get(tenantId: string, id: string) {
+  async get(tenantId: string, id: string, user?: RequestUser) {
     const quote = await this.prisma.quote.findFirst({
       where: { id, tenantId, deletedAt: null },
       include: {
@@ -81,10 +84,12 @@ export class QuoteService extends BaseEntityService {
       },
     });
     if (!quote) throw new NotFoundException(`Quote ${id} not found`);
+    await this.fls.filterReadable(user, 'quote', quote as unknown as Record<string, unknown>);
     return quote;
   }
 
   async create(tenantId: string, input: Record<string, unknown>, user: RequestUser) {
+    await this.fls.assertWritable(user, 'quote', input);
     await this.beforeSave(tenantId, 'quote', input, undefined, user);
     const quoteNumber = await this.nextQuoteNumber(tenantId);
 
@@ -146,6 +151,7 @@ export class QuoteService extends BaseEntityService {
   }
 
   async update(tenantId: string, id: string, input: Record<string, unknown>, user: RequestUser) {
+    await this.fls.assertWritable(user, 'quote', input);
     const previous = await this.get(tenantId, id);
     await this.beforeSave(tenantId, 'quote', input, previous as Record<string, unknown>, user);
     const quote = await this.prisma.quote.update({

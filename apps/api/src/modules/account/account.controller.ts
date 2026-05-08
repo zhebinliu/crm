@@ -124,14 +124,22 @@ export class AccountController {
 
   @Get()
   @RequirePermissions('account.read')
-  list(@TenantId() tenantId: string, @Query() query: ListAccountsQuery) {
-    return this.accountService.list(tenantId, query);
+  list(
+    @TenantId() tenantId: string,
+    @Query() query: ListAccountsQuery,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.accountService.list(tenantId, query, user);
   }
 
   @Get(':id')
   @RequirePermissions('account.read')
-  get(@TenantId() tenantId: string, @Param('id') id: string) {
-    return this.accountService.get(tenantId, id);
+  get(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.accountService.get(tenantId, id, user);
   }
 
   @Post()
@@ -158,7 +166,11 @@ export class AccountController {
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @RequirePermissions('account.delete')
-  softDelete(@TenantId() tenantId: string, @Param('id') id: string) {
-    return this.accountService.softDelete(tenantId, id);
+  softDelete(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.accountService.softDelete(tenantId, id, user);
   }
 }

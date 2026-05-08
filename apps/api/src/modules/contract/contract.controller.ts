@@ -75,14 +75,22 @@ export class ContractController {
 
   @Get()
   @RequirePermissions('contract.read')
-  list(@TenantId() tenantId: string, @Query() query: ListContractsQuery) {
-    return this.service.list(tenantId, query);
+  list(
+    @TenantId() tenantId: string,
+    @Query() query: ListContractsQuery,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.service.list(tenantId, query, user);
   }
 
   @Get(':id')
   @RequirePermissions('contract.read')
-  get(@TenantId() tenantId: string, @Param('id') id: string) {
-    return this.service.get(tenantId, id);
+  get(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.service.get(tenantId, id, user);
   }
 
   @Post()
@@ -109,8 +117,12 @@ export class ContractController {
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @RequirePermissions('contract.write')
-  softDelete(@TenantId() tenantId: string, @Param('id') id: string) {
-    return this.service.softDelete(tenantId, id);
+  softDelete(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.service.softDelete(tenantId, id, user);
   }
 
   @Post(':id/activate')
