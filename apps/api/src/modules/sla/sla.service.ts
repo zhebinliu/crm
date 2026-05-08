@@ -203,9 +203,15 @@ export class SlaService {
    * emit sla.breached. Returns count breached. Visible for tests.
    */
   async tickBreach(now: Date = new Date()): Promise<number> {
+    // System-wide cron query — scans across all tenants in one sweep.
+    // tenantId is preserved on each row and used when publishing the outbox
+    // event below; tenant-guard is bypassed here because milestone IDs are
+    // global identifiers and there's no per-request tenant context.
     const overdue = await this.prisma.slaMilestone.findMany({
       where: { status: 'pending', targetAt: { lt: now } },
       take: 200,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ...({ skipTenantGuard: true } as any),
     });
     let breached = 0;
     for (const m of overdue) {

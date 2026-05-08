@@ -22,8 +22,12 @@ export class WorkflowCronService {
 
   @Cron('* * * * *')
   async runScheduled(): Promise<void> {
+    // System-wide cron sweep across all tenants. Each rule row already carries
+    // tenantId, so downstream calls (executeRule etc.) honour tenant scope.
     const rules = await this.prisma.workflowRule.findMany({
       where: { trigger: WorkflowTrigger.SCHEDULED, isActive: true },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ...({ skipTenantGuard: true } as any),
     });
     for (const rule of rules) {
       if (!rule.cronExpr || !matchesCron(rule.cronExpr)) continue;
