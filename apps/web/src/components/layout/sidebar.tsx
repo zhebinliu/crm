@@ -97,13 +97,16 @@ export function Sidebar() {
       >
         {/* Branding + Collapse Toggle */}
         <div className={cn('flex items-center h-16 shrink-0', collapsed ? 'px-2 justify-center' : 'px-4 gap-3')}>
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-brand to-brand-deep flex items-center justify-center shadow-lg shadow-brand/20 shrink-0">
-            <Sparkles size={16} className="text-white" />
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logo-icon.png"
+            alt="tokenwave"
+            className="w-9 h-9 rounded-xl shrink-0 object-cover"
+          />
           {!collapsed && (
             <div className="flex flex-col flex-1 min-w-0">
               <span className="font-bold text-ink text-sm leading-none tracking-tight">词元波动</span>
-              <span className="text-[10px] text-brand font-bold tracking-[0.2em] mt-1 opacity-80 uppercase leading-none">CRM 360</span>
+              <span className="text-[10px] text-cyan-600 font-bold tracking-[0.2em] mt-1 opacity-80 uppercase leading-none">CRM 360</span>
             </div>
           )}
           <button

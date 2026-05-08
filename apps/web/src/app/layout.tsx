@@ -3,8 +3,8 @@ import './globals.css';
 import { Providers } from '@/components/providers';
 
 export const metadata: Metadata = {
-  title: 'Tokenwave CRM',
-  description: 'Tokenwave 智能销售工作台 — Lead to Cash',
+  title: 'tokenwave · 词元波动',
+  description: '词元波动 — Headless 360 智能销售工作台',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

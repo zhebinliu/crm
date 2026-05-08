@@ -86,12 +86,15 @@ export function AdminSidebar() {
     <aside className="fixed top-0 left-0 h-screen w-[var(--sidebar-w)] bg-[#0B0E14] border-r border-[#1C1F26] flex flex-col z-20 overflow-hidden shadow-2xl">
       {/* Branding */}
       <div className="flex items-center gap-3 px-6 h-16 shrink-0">
-        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-brand to-brand-deep flex items-center justify-center shadow-lg shadow-brand/20">
-          <Database size={16} className="text-white" />
-        </div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/logo-icon.png"
+          alt="tokenwave"
+          className="w-9 h-9 rounded-xl object-cover"
+        />
         <div className="flex flex-col">
           <span className="font-bold text-white text-sm leading-none tracking-tight">词元波动</span>
-          <span className="text-[10px] text-brand font-bold tracking-[0.2em] mt-1 opacity-80 uppercase text-xs uppercase tracking-wider font-semibold">ADMIN CENTER</span>
+          <span className="text-[10px] text-cyan-400 font-bold tracking-[0.2em] mt-1 opacity-80 uppercase text-xs uppercase tracking-wider font-semibold">ADMIN CENTER</span>
         </div>
       </div>
 
