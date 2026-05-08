@@ -13,6 +13,7 @@ import type { RequestUser } from '../../common/types/request-context';
 import { RecycleBinService } from '../recycle-bin/recycle-bin.service';
 import { EmbeddingService, opportunityContent } from '../embeddings/embedding.service';
 import { FlsService } from '../fls/fls.service';
+import { RecordTypeService } from '../metadata/record-type.service';
 
 export interface OppListOptions {
   search?: string;
@@ -46,6 +47,7 @@ export class OpportunityService extends BaseEntityService {
     recycleBin: RecycleBinService,
     private readonly fls: FlsService,
     embeddings: EmbeddingService,
+    private readonly recordTypes: RecordTypeService,
   ) {
     super(workflow, validation, audit, emitter, outbox, recycleBin);
     this.embeddings = embeddings;
@@ -120,6 +122,9 @@ export class OpportunityService extends BaseEntityService {
   }
 
   async create(tenantId: string, input: Record<string, unknown>, user: RequestUser) {
+    // Wave 19b: default Record Type before validation so RT-scoped picklists
+    // and validation rules see the correct subtype.
+    await this.recordTypes.applyDefaults(tenantId, 'opportunity', input);
     await this.fls.assertWritable(user, 'opportunity', input);
     await this.beforeSave(tenantId, 'opportunity', input, undefined, user);
 

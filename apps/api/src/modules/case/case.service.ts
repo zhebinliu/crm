@@ -20,6 +20,7 @@ import type { RequestUser } from '../../common/types/request-context';
 import { RecycleBinService } from '../recycle-bin/recycle-bin.service';
 import { EmbeddingService, caseContent } from '../embeddings/embedding.service';
 import { FlsService } from '../fls/fls.service';
+import { RecordTypeService } from '../metadata/record-type.service';
 
 export interface CaseListOptions {
   search?: string;
@@ -45,6 +46,7 @@ export class CaseService extends BaseEntityService {
     recycleBin: RecycleBinService,
     embeddings: EmbeddingService,
     private readonly fls: FlsService,
+    private readonly recordTypes: RecordTypeService,
   ) {
     super(workflow, validation, audit, emitter, outbox, recycleBin);
     this.embeddings = embeddings;
@@ -112,6 +114,9 @@ export class CaseService extends BaseEntityService {
   }
 
   async create(tenantId: string, input: Record<string, unknown>, user: RequestUser) {
+    // Wave 19b: default Record Type before validation so RT-scoped picklists
+    // and validation rules see the correct subtype.
+    await this.recordTypes.applyDefaults(tenantId, 'case', input);
     // Wave 16a: reject writes to fields the user lacks writePermission for.
     await this.fls.assertWritable(user, 'case', input);
     await this.beforeSave(tenantId, 'case', input, undefined, user);

@@ -78,6 +78,8 @@ model Tenant {
   userTerritories            UserTerritory[]
   accountTerritories         AccountTerritory[]
   territoryAssignmentRules   TerritoryAssignmentRule[]
+  recordTypes         RecordType[]
+  pageLayouts         PageLayout[]
 
   @@map("tenants")
 }
@@ -492,6 +494,64 @@ model PicklistValue {
   @@map("picklist_values")
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// RECORD TYPES & PAGE LAYOUTS (Wave 19b)
+// ─────────────────────────────────────────────────────────────────────────
+// Record Types: per-object subtypes with their own picklists / layouts /
+// validation. e.g. Opportunity has record types "国内" and "海外", each
+// with different stage picklists.
+
+model RecordType {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  objectApiName String   // "opportunity"
+  apiName      String   // "domestic"
+  label        String
+  description  String?
+  isDefault    Boolean  @default(false)  // exactly one per (tenant,objectApiName) should be default
+  isActive     Boolean  @default(true)
+  // optional override of which Picklist drives a particular FIELD on this RT
+  // shape: { "stage": "<picklistId>", "leadSource": "<picklistId>" }
+  picklistOverrides Json @default("{}")
+  // page-layout reference; null falls back to ObjectDef's default layout
+  layoutId     String?
+  layout       PageLayout? @relation(fields: [layoutId], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  @@unique([tenantId, objectApiName, apiName])
+  @@index([tenantId, objectApiName])
+  @@map("record_types")
+}
+
+// Real Page Layout — structured, renderable. Keep ObjectDef.layoutJson for
+// backward compat; new world uses this richer model.
+model PageLayout {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  objectApiName String
+  apiName      String
+  label        String
+  // structured layout: array of sections, each with rows of fields/related-lists
+  // [
+  //   { type: "section", title: "信息", columns: 2, rows: [
+  //       { fields: [{apiName:"name", required:true},{apiName:"amount"}] },
+  //       { fields: [{apiName:"stage"},{apiName:"closeDate"}] } ]},
+  //   { type: "related-list", childObjectApiName: "activity", filterApiName: "owner",
+  //     columns: ["subject","dueDate","status","ownerId"], limit: 25 },
+  //   { type: "richtext", html: "..." }
+  // ]
+  sections     Json     @default("[]")
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  recordTypes  RecordType[]
+  @@unique([tenantId, objectApiName, apiName])
+  @@index([tenantId, objectApiName])
+  @@map("page_layouts")
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 // LTC CORE — Lead to Cash
 // ════════════════════════════════════════════════════════════════════════════
@@ -538,6 +598,10 @@ model Lead {
   description  String? @db.Text
   customFields Json    @default("{}")
 
+  // Wave 19b: Record Type — picks which subtype layout/picklists apply.
+  // Nullable; defaulted on create by RecordTypeService.applyDefaults.
+  recordTypeId String?
+
   // conversion
   isConverted        Boolean   @default(false)
   convertedAt        DateTime?
@@ -558,6 +622,7 @@ model Lead {
   @@index([tenantId, email])
   @@index([tenantId, isConverted])
   @@index([tenantId, personId])
+  @@index([tenantId, recordTypeId])
   @@map("leads")
 }
 
@@ -689,6 +754,9 @@ model Opportunity {
   isWon        Boolean @default(false)
   customFields Json    @default("{}")
 
+  // Wave 19b: Record Type — picks which subtype layout/picklists apply.
+  recordTypeId String?
+
   lineItems OpportunityLineItem[]
   quotes    Quote[]
   orders    Order[]
@@ -703,6 +771,7 @@ model Opportunity {
   @@index([tenantId, ownerId])
   @@index([tenantId, accountId])
   @@index([tenantId, closeDate])
+  @@index([tenantId, recordTypeId])
   @@map("opportunities")
 }
 
@@ -1195,11 +1264,14 @@ model Case {
 
   customFields Json @default("{}")
 
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  createdById String?
-  updatedById String?
-  deletedAt   DateTime?
+  // Wave 19b: Record Type — picks which subtype layout/picklists apply.
+  recordTypeId String?
+
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  createdById  String?
+  updatedById  String?
+  deletedAt    DateTime?
 
   comments CaseComment[]
 
@@ -1208,6 +1280,7 @@ model Case {
   @@index([tenantId, ownerId])
   @@index([tenantId, accountId])
   @@index([tenantId, priority, status])
+  @@index([tenantId, recordTypeId])
   @@map("cases")
 }
 

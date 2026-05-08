@@ -12,6 +12,7 @@ import { EVENTS } from '@tokenwave/shared';
 import { FlsService } from '../fls/fls.service';
 import type { RequestUser } from '../../common/types/request-context';
 import { RecycleBinService } from '../recycle-bin/recycle-bin.service';
+import { RecordTypeService } from '../metadata/record-type.service';
 
 export interface LeadListOptions {
   search?: string;
@@ -43,6 +44,7 @@ export class LeadService extends BaseEntityService {
     private readonly identity: IdentityResolutionService,
     private readonly fls: FlsService,
     embeddings: EmbeddingService,
+    private readonly recordTypes: RecordTypeService,
   ) {
     super(workflow, validation, audit, emitter, outbox, recycleBin);
     this.embeddings = embeddings;
@@ -106,6 +108,9 @@ export class LeadService extends BaseEntityService {
   }
 
   async create(tenantId: string, input: Record<string, unknown>, user: RequestUser) {
+    // Wave 19b: default Record Type before validation so RT-scoped picklists
+    // and validation rules see the correct subtype.
+    await this.recordTypes.applyDefaults(tenantId, 'lead', input);
     // Wave 16a: reject writes to fields the user lacks writePermission for.
     await this.fls.assertWritable(user, 'lead', input);
     await this.beforeSave(tenantId, 'lead', input, undefined, user);
