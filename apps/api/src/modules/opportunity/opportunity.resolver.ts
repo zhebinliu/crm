@@ -1,13 +1,20 @@
-import { Resolver, Query, Mutation, Args, ID, Int } from '@nestjs/graphql';
+import { Resolver, Query, Mutation, Args, ID, Int, ResolveField, Parent, Context } from '@nestjs/graphql';
 import { UseGuards } from '@nestjs/common';
 import { OpportunityService } from './opportunity.service';
 import { Opportunity, PaginatedOpportunity } from './opportunity.type';
 import { CreateOpportunityInput, UpdateOpportunityInput } from './opportunity.input';
+import { Account } from '../account/account.type';
+import { User } from '../user/user.type';
 import { GqlCurrentUser } from '../auth/decorators/gql-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 import type { RequestUser } from '../../common/types/request-context';
+import type { DataLoaderRegistry } from '../../common/graphql/dataloader.registry';
+
+interface GqlContext {
+  loaders?: DataLoaderRegistry;
+}
 
 @Resolver(() => Opportunity)
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -43,6 +50,31 @@ export class OpportunityResolver {
     @Args('id', { type: () => ID }) id: string,
   ) {
     return this.opportunitiesService.get(user.tenantId, id, user);
+  }
+
+  // ── @ResolveField — DataLoader-batched parents (Wave 18f) ────────────
+  // List queries returning N opportunities used to fire N findFirst calls
+  // for `account`. With the loader, all of them collapse into a single
+  // findMany({ where: { id: { in: [...] } }}).
+
+  @ResolveField('account', () => Account, { nullable: true })
+  async resolveAccount(
+    @Parent() opp: { accountId?: string; account?: unknown },
+    @Context() ctx: GqlContext,
+  ) {
+    if (opp.account) return opp.account;
+    if (!opp.accountId || !ctx?.loaders) return null;
+    return ctx.loaders.accountById.load(opp.accountId);
+  }
+
+  @ResolveField('owner', () => User, { nullable: true })
+  async resolveOwner(
+    @Parent() opp: { ownerId?: string; owner?: unknown },
+    @Context() ctx: GqlContext,
+  ) {
+    if (opp.owner) return opp.owner;
+    if (!opp.ownerId || !ctx?.loaders) return null;
+    return ctx.loaders.userById.load(opp.ownerId);
   }
 
   @Mutation(() => Opportunity)

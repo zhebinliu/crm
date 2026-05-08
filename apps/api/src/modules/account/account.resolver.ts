@@ -1,13 +1,20 @@
-import { Resolver, Query, Mutation, Args, ID, Int } from '@nestjs/graphql';
+import { Resolver, Query, Mutation, Args, ID, Int, ResolveField, Parent, Context } from '@nestjs/graphql';
 import { UseGuards } from '@nestjs/common';
 import { AccountService } from './account.service';
 import { Account, PaginatedAccount } from './account.type';
 import { CreateAccountInput, UpdateAccountInput } from './account.input';
+import { User } from '../user/user.type';
 import { GqlCurrentUser } from '../auth/decorators/gql-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 import type { RequestUser } from '../../common/types/request-context';
+import type { DataLoaderRegistry } from '../../common/graphql/dataloader.registry';
+
+// Wave 18f: GraphQL context shape for DataLoader-aware resolvers.
+interface GqlContext {
+  loaders?: DataLoaderRegistry;
+}
 
 @Resolver(() => Account)
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -43,8 +50,33 @@ export class AccountResolver {
   async account(
     @GqlCurrentUser() user: RequestUser,
     @Args('id', { type: () => ID }) id: string,
+    @Context() ctx: GqlContext,
   ) {
+    // Wave 18f: prefer DataLoader if a per-request registry is in context
+    // — collapses Account.account + nested account references into a
+    // single batched findMany. Fall back to the service path if the
+    // GraphQL context wasn't built with a registry.
+    if (ctx?.loaders) {
+      const row = await ctx.loaders.accountById.load(id);
+      if (row) return row;
+    }
     return this.accountsService.get(user.tenantId, id, user);
+  }
+
+  // ── @ResolveField — DataLoader-batched relations ─────────────────────
+  // Wave 18f: replaces what would otherwise be a per-row prisma fetch.
+  // `owner` was always resolved by Prisma's `include` — switching to a
+  // DataLoader path lets us short-circuit when the user wasn't included.
+
+  @ResolveField('owner', () => User, { nullable: true })
+  async resolveOwner(
+    @Parent() account: { ownerId: string; owner?: unknown },
+    @Context() ctx: GqlContext,
+  ) {
+    // If service-layer already eager-loaded `owner`, use it.
+    if (account.owner) return account.owner;
+    if (!account.ownerId || !ctx?.loaders) return null;
+    return ctx.loaders.userById.load(account.ownerId);
   }
 
   @Mutation(() => Account)
