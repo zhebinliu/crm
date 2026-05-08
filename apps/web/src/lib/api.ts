@@ -205,6 +205,90 @@ export const adminApi = {
     api.get('/admin/audit-log/facets').then((r) => r.data),
 };
 
+// ── Record Types + Page Layouts (Wave 19b / 20b) ──────────────────────────
+
+export interface RecordTypeRow {
+  id: string;
+  apiName: string;
+  label: string;
+  description?: string | null;
+  isDefault: boolean;
+  isActive: boolean;
+  layoutId?: string | null;
+  layout?: { id: string; apiName: string; label: string } | null;
+  picklistOverrides?: Record<string, string>;
+}
+
+export interface PageLayoutRow {
+  id: string;
+  apiName: string;
+  label: string;
+  isActive: boolean;
+  sections: unknown[];
+}
+
+export interface ResolvedLayout {
+  source: 'record-type' | 'default' | 'auto';
+  layout: {
+    id: string | null;
+    apiName: string;
+    label: string;
+    sections: unknown[];
+  };
+}
+
+export const recordTypeApi = {
+  list: (objectApiName: string): Promise<RecordTypeRow[]> =>
+    api
+      .get(`/admin/metadata/objects/${objectApiName}/record-types`)
+      .then((r) => r.data?.data ?? r.data),
+  get: (objectApiName: string, id: string): Promise<RecordTypeRow> =>
+    api
+      .get(`/admin/metadata/objects/${objectApiName}/record-types/${id}`)
+      .then((r) => r.data?.data ?? r.data),
+  create: (objectApiName: string, d: Record<string, unknown>) =>
+    api
+      .post(`/admin/metadata/objects/${objectApiName}/record-types`, d)
+      .then((r) => r.data?.data ?? r.data),
+  update: (objectApiName: string, id: string, d: Record<string, unknown>) =>
+    api
+      .patch(`/admin/metadata/objects/${objectApiName}/record-types/${id}`, d)
+      .then((r) => r.data?.data ?? r.data),
+  remove: (objectApiName: string, id: string) =>
+    api
+      .delete(`/admin/metadata/objects/${objectApiName}/record-types/${id}`)
+      .then((r) => r.data?.data ?? r.data),
+};
+
+export const pageLayoutApi = {
+  list: (objectApiName: string): Promise<PageLayoutRow[]> =>
+    api
+      .get(`/admin/metadata/objects/${objectApiName}/page-layouts`)
+      .then((r) => r.data?.data ?? r.data),
+  get: (objectApiName: string, id: string): Promise<PageLayoutRow> =>
+    api
+      .get(`/admin/metadata/objects/${objectApiName}/page-layouts/${id}`)
+      .then((r) => r.data?.data ?? r.data),
+  create: (objectApiName: string, d: Record<string, unknown>) =>
+    api
+      .post(`/admin/metadata/objects/${objectApiName}/page-layouts`, d)
+      .then((r) => r.data?.data ?? r.data),
+  update: (objectApiName: string, id: string, d: Record<string, unknown>) =>
+    api
+      .patch(`/admin/metadata/objects/${objectApiName}/page-layouts/${id}`, d)
+      .then((r) => r.data?.data ?? r.data),
+  remove: (objectApiName: string, id: string) =>
+    api
+      .delete(`/admin/metadata/objects/${objectApiName}/page-layouts/${id}`)
+      .then((r) => r.data?.data ?? r.data),
+  resolve: (objectApiName: string, recordTypeId?: string): Promise<ResolvedLayout> =>
+    api
+      .get(`/admin/metadata/objects/${objectApiName}/page-layouts/resolve`, {
+        params: recordTypeId ? { recordTypeId } : {},
+      })
+      .then((r) => r.data?.data ?? r.data),
+};
+
 export const forecastApi = {
   // Targets
   getTarget: (period: string, userId?: string) =>
