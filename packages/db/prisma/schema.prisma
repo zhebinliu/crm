@@ -67,6 +67,7 @@ model Tenant {
   recycleBinEntries   RecycleBinEntry[]
   recordEmbeddings    RecordEmbedding[]
   fieldHistory        FieldHistory[]
+  apiKeys             ApiKey[]
 
   @@map("tenants")
 }
@@ -93,6 +94,38 @@ model FieldHistory {
 
   @@index([tenantId, recordType, recordId, fieldName, changedAt])
   @@map("field_history")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// MACHINE-TO-MACHINE API KEYS (Wave 18d)
+// ─────────────────────────────────────────────────────────────────────────
+// Per-tenant API keys for integrations (Zapier, custom scripts, etc).
+// `prefix` (first 8 chars after the `twk_` marker) is stored plaintext for
+// list/display & lookup; the full key is bcrypted into `hashedKey` and the
+// raw value is shown to the caller exactly once at issue time. `permissions`
+// is a subset (with optional `*` wildcards) of the tenant's permission
+// catalog; the API-key auth middleware injects them into req.user just like
+// JWT-derived perms.
+
+model ApiKey {
+  id          String    @id @default(cuid())
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String // "Zapier integration"
+  prefix      String // first 8 chars of the key, for display ("twk_a8c..."), unique per tenant
+  hashedKey   String // bcrypt hash of the full key
+  // permissions this key carries — subset of any permission code that
+  // exists in the permissions table. Wildcards allowed.
+  permissions String[]
+  createdAt   DateTime  @default(now())
+  createdById String?
+  expiresAt   DateTime?
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+
+  @@unique([tenantId, prefix])
+  @@index([tenantId, revokedAt])
+  @@map("api_keys")
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -182,10 +215,36 @@ model User {
   recordShares          RecordShare[]      @relation("RecordShareUser")
   ownedCases            Case[]             @relation("CaseOwner")
   ownedCampaigns        Campaign[]         @relation("CampaignOwner")
+  mfa                   UserMfaSecret?
 
   @@unique([tenantId, email])
   @@index([tenantId])
   @@map("users")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 2FA / MFA (Wave 18d)
+// ─────────────────────────────────────────────────────────────────────────
+// Per-user TOTP secret + hashed backup codes. The TOTP secret is stored
+// AES-256-GCM encrypted at rest using ENCRYPTION_KEY (CryptoService).
+// Backup codes are hashed (sha256+salt); plaintext shown to the user
+// exactly once at provision time.
+
+model UserMfaSecret {
+  id              String    @id @default(cuid())
+  userId          String    @unique
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // base32-encoded TOTP secret. Stored AES-256 encrypted at rest using
+  // ENCRYPTION_KEY env (see CryptoService).
+  secretEncrypted String
+  enabled         Boolean   @default(false)
+  enabledAt       DateTime?
+  // backup codes (hashed; user gets plaintext exactly once)
+  backupCodes     String[]  @default([])
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@map("user_mfa_secrets")
 }
 
 model Role {

@@ -16,6 +16,11 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       context.getClass(),
     ]);
     if (isPublic) return true;
+    // If ApiKeyAuthMiddleware already authenticated the request, skip the
+    // JWT verification step entirely. This lets API-key callers reach
+    // protected endpoints without a Bearer token.
+    const req = this.getRequest(context);
+    if (req?.user?.isApiKey) return true;
     return super.canActivate(context);
   }
 
