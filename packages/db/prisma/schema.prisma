@@ -87,6 +87,10 @@ model Tenant {
   permissionSets      PermissionSet[]
   currencyRates       CurrencyRate[]
   labelTranslations   LabelTranslation[]
+  knowledgeArticles   KnowledgeArticle[]
+  slaPolicies         SlaPolicy[]
+  entitlements        Entitlement[]
+  slaMilestones       SlaMilestone[]
 
   @@map("tenants")
 }
@@ -759,6 +763,7 @@ model Account {
   contracts     Contract[]
   cases         Case[]
   territories   AccountTerritory[]
+  entitlements  Entitlement[]
 
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -805,8 +810,9 @@ model Contact {
   mailingPostalCode String?
   mailingCountry    String?
 
-  cases           Case[]
-  campaignMembers CampaignMember[]
+  cases             Case[]
+  campaignMembers   CampaignMember[]
+  entitlements      Entitlement[]
 
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -1377,7 +1383,9 @@ model Case {
   updatedById  String?
   deletedAt    DateTime?
 
-  comments CaseComment[]
+  comments      CaseComment[]
+  articleLinks  CaseArticleLink[]
+  slaMilestones SlaMilestone[]
 
   @@unique([tenantId, caseNumber])
   @@index([tenantId, status])
@@ -1402,6 +1410,136 @@ model CaseComment {
 
   @@index([tenantId, caseId])
   @@map("case_comments")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// KNOWLEDGE BASE (Wave 19h)
+// ─────────────────────────────────────────────────────────────────────────
+// Knowledge articles with versioning, status (draft/published/archived),
+// and engagement metrics. Used for case deflection via semantic search.
+
+model KnowledgeArticle {
+  id              String   @id @default(cuid())
+  tenantId        String
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  articleNumber   String   // "KB-0042"
+  title           String
+  // Markdown body
+  content         String   @db.Text
+  summary         String?  @db.Text
+  // "draft" | "published" | "archived"
+  status          String   @default("draft")
+  category        String?
+  tags            String[] @default([])
+  ownerId         String
+  // Versioning: bump on every meaningful edit
+  version         Int      @default(1)
+  publishedAt     DateTime?
+  archivedAt      DateTime?
+  // Engagement metrics
+  viewCount       Int      @default(0)
+  helpfulCount    Int      @default(0)
+  notHelpfulCount Int      @default(0)
+  caseLinks       CaseArticleLink[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  deletedAt       DateTime?
+
+  @@unique([tenantId, articleNumber])
+  @@index([tenantId, status, category])
+  @@index([tenantId, ownerId])
+  @@map("knowledge_articles")
+}
+
+model CaseArticleLink {
+  id        String           @id @default(cuid())
+  tenantId  String
+  caseId    String
+  case      Case             @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  articleId String
+  article   KnowledgeArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  // "suggested_by_ai" | "linked_by_agent" | "marked_helpful"
+  source    String           @default("linked_by_agent")
+  createdAt DateTime         @default(now())
+
+  @@unique([caseId, articleId])
+  @@index([articleId])
+  @@map("case_article_links")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// SLA POLICY / ENTITLEMENT / MILESTONE (Wave 19h)
+// ─────────────────────────────────────────────────────────────────────────
+
+model SlaPolicy {
+  id                         String   @id @default(cuid())
+  tenantId                   String
+  tenant                     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  apiName                    String
+  label                      String
+  description                String?
+  // Predicate to match cases: { priority: "HIGH" } or { OR: [...] }
+  caseFilter                 Json     @default("{}")
+  // Business hours: { mon: [9,18], tue: [9,18], ... } in 24h, tenant tz
+  businessHours              Json     @default("{}")
+  holidays                   String[] @default([])
+  firstResponseTargetMinutes Int      @default(60)
+  resolutionTargetMinutes    Int      @default(1440)
+  isActive                   Boolean  @default(true)
+  priority                   Int      @default(100)
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+  entitlements               Entitlement[]
+  milestones                 SlaMilestone[]
+
+  @@unique([tenantId, apiName])
+  @@index([tenantId, isActive, priority])
+  @@map("sla_policies")
+}
+
+model Entitlement {
+  id          String    @id @default(cuid())
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  accountId   String?
+  account     Account?  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  contactId   String?
+  contact     Contact?  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  slaPolicyId String
+  slaPolicy   SlaPolicy @relation(fields: [slaPolicyId], references: [id], onDelete: Cascade)
+  startsAt    DateTime
+  endsAt      DateTime
+  status      String    @default("active") // active | expired | cancelled
+  tier        String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([tenantId, accountId, status])
+  @@index([tenantId, contactId, status])
+  @@map("entitlements")
+}
+
+model SlaMilestone {
+  id          String    @id @default(cuid())
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  policyId    String?
+  policy      SlaPolicy? @relation(fields: [policyId], references: [id], onDelete: SetNull)
+  caseId      String
+  case        Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  // "first_response" | "resolution" | custom
+  type        String
+  targetAt    DateTime
+  completedAt DateTime?
+  // "pending" | "completed" | "breached" | "stopped"
+  status      String    @default("pending")
+  breachedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([tenantId, caseId])
+  @@index([tenantId, status, targetAt])
+  @@map("sla_milestones")
 }
 
 // ════════════════════════════════════════════════════════════════════════════
