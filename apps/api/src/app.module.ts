@@ -58,6 +58,14 @@ import { QueryModule } from './modules/query/query.module';
 import { CompositeModule } from './modules/composite/composite.module';
 import { DataLoaderModule } from './common/graphql/dataloader.module';
 import { DataLoaderRegistry } from './common/graphql/dataloader.registry';
+import { ReportModule } from './modules/report/report.module';
+import { CpqModule } from './modules/cpq/cpq.module';
+import { TerritoryModule } from './modules/territory/territory.module';
+import { PermissionsModule } from './modules/permissions/permissions.module';
+import { CurrencyModule } from './modules/currency/currency.module';
+import { TranslationModule } from './modules/i18n/translation.module';
+import { KnowledgeModule } from './modules/knowledge/knowledge.module';
+import { SlaModule } from './modules/sla/sla.module';
 
 import { HealthController } from './health.controller';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
@@ -145,6 +153,14 @@ import { PermissionsGuard } from './common/guards/permissions.guard';
     QueryModule,
     CompositeModule,
     DataLoaderModule,
+    ReportModule,
+    CpqModule,
+    TerritoryModule,
+    PermissionsModule,
+    CurrencyModule,
+    TranslationModule,
+    KnowledgeModule,
+    SlaModule,
   ],
   controllers: [HealthController],
   providers: [
