@@ -31,6 +31,7 @@ const TENANT_FREE_MODELS = new Set<string>([
   'UserRole',        // join: User(tenant-scoped) → Role(tenant-scoped)
   'Session',         // FK to User
   'RefreshToken',    // FK to User
+  'UserMfaSecret',   // FK to User (tenant scope inherited via user)
   'OutboxEvent',     // global event log
   'SequenceCounter', // global counter (still keyed by tenantId in `key`)
   'PicklistValue',   // FK to Picklist (tenant-scoped)

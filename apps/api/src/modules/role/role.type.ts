@@ -3,26 +3,26 @@ import { ObjectType, Field, ID, GraphQLISODateTime } from '@nestjs/graphql';
 @ObjectType()
 export class Role {
   @Field(() => ID)
-  id: string;
+  id!: string;
 
   @Field()
-  tenantId: string;
+  tenantId!: string;
 
   @Field()
-  name: string;
+  name!: string;
 
   @Field()
-  code: string;
+  code!: string;
 
   @Field({ nullable: true })
   description?: string;
 
   @Field()
-  isSystem: boolean;
+  isSystem!: boolean;
 
   @Field(() => GraphQLISODateTime)
-  createdAt: Date;
+  createdAt!: Date;
 
   @Field(() => GraphQLISODateTime)
-  updatedAt: Date;
+  updatedAt!: Date;
 }

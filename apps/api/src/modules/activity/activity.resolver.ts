@@ -12,7 +12,7 @@ import type { RequestUser } from '../../common/types/request-context';
 @Resolver(() => Activity)
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class ActivityResolver {
-  constructor(private readonly activities: ActivityService) {}
+  constructor(private readonly activitiesService: ActivityService) {}
 
   @Query(() => PaginatedActivity)
   @RequirePermissions('activity.read')
@@ -27,7 +27,7 @@ export class ActivityResolver {
     @Args('skip', { type: () => Int, nullable: true }) skip?: number,
     @Args('take', { type: () => Int, nullable: true }) take?: number,
   ) {
-    const res = await this.activities.list(user.tenantId, {
+    const res = await this.activitiesService.list(user.tenantId, {
       search,
       type,
       status,
@@ -46,7 +46,7 @@ export class ActivityResolver {
     @GqlCurrentUser() user: RequestUser,
     @Args('id', { type: () => ID }) id: string,
   ) {
-    return this.activities.get(user.tenantId, id, user);
+    return this.activitiesService.get(user.tenantId, id, user);
   }
 
   @Mutation(() => Activity)
@@ -55,7 +55,7 @@ export class ActivityResolver {
     @GqlCurrentUser() user: RequestUser,
     @Args('input') input: CreateActivityInput,
   ) {
-    return this.activities.create(user.tenantId, input as any, user);
+    return this.activitiesService.create(user.tenantId, input as any, user);
   }
 
   @Mutation(() => Activity)
@@ -65,7 +65,7 @@ export class ActivityResolver {
     @Args('id', { type: () => ID }) id: string,
     @Args('input') input: UpdateActivityInput,
   ) {
-    return this.activities.update(user.tenantId, id, input as any, user);
+    return this.activitiesService.update(user.tenantId, id, input as any, user);
   }
 
   @Mutation(() => Boolean)
@@ -74,7 +74,7 @@ export class ActivityResolver {
     @GqlCurrentUser() user: RequestUser,
     @Args('id', { type: () => ID }) id: string,
   ) {
-    await this.activities.complete(user.tenantId, id, user);
+    await this.activitiesService.complete(user.tenantId, id, user);
     return true;
   }
 
@@ -84,7 +84,7 @@ export class ActivityResolver {
     @GqlCurrentUser() user: RequestUser,
     @Args('id', { type: () => ID }) id: string,
   ) {
-    await this.activities.softDelete(user.tenantId, id, user);
+    await this.activitiesService.softDelete(user.tenantId, id, user);
     return true;
   }
 }

@@ -5,10 +5,10 @@ import { ActivityType, ActivityStatus } from '@prisma/client';
 @InputType()
 export class CreateActivityInput {
   @Field(() => ActivityType)
-  type: ActivityType;
+  type!: ActivityType;
 
   @Field()
-  subject: string;
+  subject!: string;
 
   @Field({ nullable: true })
   priority?: string;

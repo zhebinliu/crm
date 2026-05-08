@@ -5,6 +5,17 @@ import * as bcrypt from 'bcrypt';
 import { randomBytes, createHash } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { JwtPayload } from './jwt.strategy';
+import { MfaService } from './mfa.service';
+
+/**
+ * Short-lived "MFA pending" token returned mid-login. Verified by
+ * `verifyMfaAndIssueTokens`. Distinct from the access-token payload —
+ * has only `sub` + `mfa: true` and a 5-minute TTL.
+ */
+interface MfaChallengePayload {
+  sub: string;
+  mfa: true;
+}
 
 @Injectable()
 export class AuthService {
@@ -12,6 +23,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
+    private readonly mfa: MfaService,
   ) {}
 
   async login(tenantSlug: string, email: string, password: string) {
@@ -36,6 +48,66 @@ export class AuthService {
 
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) throw new UnauthorizedException({ code: 'INVALID_CREDENTIALS', message: 'Invalid credentials' });
+
+    // If MFA is enabled, gate the login behind a second-factor challenge.
+    // Backwards compatible: users without MFA see the original response.
+    if (await this.mfa.isEnabled(user.id)) {
+      const mfaToken = await this.issueMfaChallengeToken(user.id);
+      return { mfaRequired: true as const, mfaToken };
+    }
+
+    return this.completeLogin(user.id, tenant.slug);
+  }
+
+  /**
+   * Step 2 of the two-step login. Validates the short-lived mfaToken,
+   * runs the TOTP/backup-code check, and returns the full token bundle.
+   */
+  async verifyMfaAndIssueTokens(mfaToken: string, code: string) {
+    let payload: MfaChallengePayload;
+    try {
+      payload = await this.jwt.verifyAsync<MfaChallengePayload>(mfaToken);
+    } catch {
+      throw new UnauthorizedException({ code: 'INVALID_MFA_TOKEN', message: 'Invalid or expired MFA token' });
+    }
+    if (!payload?.sub || payload.mfa !== true) {
+      throw new UnauthorizedException({ code: 'INVALID_MFA_TOKEN', message: 'Invalid MFA token' });
+    }
+    const ok = await this.mfa.verifyForLogin(payload.sub, code);
+    if (!ok) {
+      throw new UnauthorizedException({ code: 'INVALID_MFA_CODE', message: 'Invalid MFA code' });
+    }
+    const user = await this.prisma.user.findFirst({
+      // id is globally unique (cuid); tenant context is recovered via include.
+      // skipTenantGuard is safe here because the MFA challenge token already
+      // proved possession of an authenticated User.id.
+      where: { id: payload.sub },
+      include: { tenant: true },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ...({ skipTenantGuard: true } as any),
+    });
+    if (!user || !user.isActive || user.deletedAt) {
+      throw new UnauthorizedException({ code: 'UNAUTHORIZED', message: 'User disabled' });
+    }
+    return this.completeLogin(user.id, user.tenant.slug);
+  }
+
+  /** Shared finalization for both single-step and post-MFA logins. */
+  private async completeLogin(userId: string, tenantSlug: string) {
+    const user = await this.prisma.user.findFirst({
+      // id is globally unique; tenant context comes via included relations.
+      where: { id: userId },
+      include: {
+        roles: {
+          include: {
+            role: { include: { permissions: { include: { permission: true } } } },
+          },
+        },
+      },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ...({ skipTenantGuard: true } as any),
+    });
+    if (!user) throw new UnauthorizedException({ code: 'UNAUTHORIZED', message: 'User not found' });
 
     // Tenant-guard requires tenantId in updates; updateMany lets us add it.
     await this.prisma.user.updateMany({
@@ -64,11 +136,18 @@ export class AuthService {
         email: user.email,
         displayName: user.displayName,
         tenantId: user.tenantId,
-        tenantSlug: tenant.slug,
+        tenantSlug,
         roles: roleCodes,
         permissions: perms,
       },
     };
+  }
+
+  private async issueMfaChallengeToken(userId: string): Promise<string> {
+    const ttl = Number(this.config.get('MFA_CHALLENGE_TTL') ?? 300); // 5 min default
+    return this.jwt.signAsync({ sub: userId, mfa: true } satisfies MfaChallengePayload, {
+      expiresIn: ttl,
+    });
   }
 
   async refresh(refreshToken: string) {
@@ -76,6 +155,8 @@ export class AuthService {
     const rec = await this.prisma.refreshToken.findUnique({
       where: { tokenHash: hash },
       include: { user: true },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ...({ skipTenantGuard: true } as any),
     });
     if (!rec || rec.revokedAt || rec.expiresAt < new Date()) {
       throw new UnauthorizedException({ code: 'UNAUTHORIZED', message: 'Invalid refresh token' });

@@ -5,19 +5,19 @@ import { Paginated } from '../../common/graphql/paginated.type';
 @ObjectType()
 export class ValidationRule {
   @Field(() => ID)
-  id: string;
+  id!: string;
 
   @Field()
-  tenantId: string;
+  tenantId!: string;
 
   @Field(() => GraphQLJSON, { nullable: true })
   customData?: any;
 
   @Field(() => GraphQLISODateTime)
-  createdAt: Date;
+  createdAt!: Date;
 
   @Field(() => GraphQLISODateTime)
-  updatedAt: Date;
+  updatedAt!: Date;
 }
 
 @ObjectType()

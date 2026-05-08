@@ -5,9 +5,15 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
+import { MfaService } from './mfa.service';
+import { MfaController } from './mfa.controller';
+import { ApiKeyService } from './api-key.service';
+import { ApiKeyController } from './api-key.controller';
+import { CryptoModule } from '../../common/crypto.service';
 
 @Module({
   imports: [
+    CryptoModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -18,8 +24,10 @@ import { JwtStrategy } from './jwt.strategy';
       inject: [ConfigService],
     }),
   ],
-  providers: [AuthService, JwtStrategy],
-  controllers: [AuthController],
-  exports: [AuthService],
+  providers: [AuthService, JwtStrategy, MfaService, ApiKeyService],
+  controllers: [AuthController, MfaController, ApiKeyController],
+  // Export ApiKeyService so the global ApiKeyAuthMiddleware can resolve it
+  // when AppModule wires the middleware in.
+  exports: [AuthService, MfaService, ApiKeyService],
 })
 export class AuthModule {}

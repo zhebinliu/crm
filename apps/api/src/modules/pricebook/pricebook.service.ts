@@ -103,4 +103,21 @@ export class PriceBookService extends BaseEntityService {
     await this.afterUpdate(tenantId, 'pricebook', book as Record<string, unknown>, previous as Record<string, unknown>, user);
     return book;
   }
+
+  /**
+   * Resolver-friendly create that mirrors the shape of other entity services.
+   * Delegates to `createBook`; the input bag may carry `name` / `isStandard`.
+   */
+  async create(tenantId: string, input: Record<string, unknown>, user?: RequestUser) {
+    const name = String(input['name'] ?? '');
+    const isStandard = Boolean(input['isStandard'] ?? false);
+    return this.createBook(tenantId, name, isStandard, user);
+  }
+
+  /**
+   * PriceBook has no `deletedAt` column, so we soft-delete by deactivating.
+   */
+  async softDelete(tenantId: string, id: string, user?: RequestUser) {
+    return this.setActive(tenantId, id, false, user);
+  }
 }

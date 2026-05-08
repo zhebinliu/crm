@@ -16,14 +16,25 @@ export class WorkflowProcessor extends WorkerHost {
   }
 
   async process(job: Job): Promise<void> {
-    if (job.name === 'run-rule') {
-      const { ruleId, ctx } = job.data as { ruleId: string; ctx: TriggerContext };
+    // Wave 18b1: jobs are tagged with tenantId in `data.tenantId` and
+    // (for newly enqueued jobs) named `run-rule:<tenantId>`. We accept
+    // both the legacy `run-rule` name and the new prefixed form so
+    // in-flight jobs at deploy time are still drained.
+    if (job.name === 'run-rule' || job.name.startsWith('run-rule:')) {
+      const { ruleId, ctx, tenantId } = job.data as {
+        ruleId: string;
+        ctx: TriggerContext;
+        tenantId?: string;
+      };
+      const tenant = tenantId ?? ctx?.tenantId;
       try {
         const rule = await this.prisma.workflowRule.findUnique({ where: { id: ruleId } });
         if (!rule || !rule.isActive) return;
         await this.workflow.executeRule(rule, ctx);
       } catch (e) {
-        this.log.error(`Workflow job ${job.id} failed: ${e instanceof Error ? e.message : e}`);
+        this.log.error(
+          `Workflow job ${job.id} (tenant=${tenant ?? 'unknown'}) failed: ${e instanceof Error ? e.message : e}`,
+        );
         throw e; // BullMQ will retry
       }
     }

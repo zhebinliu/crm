@@ -78,7 +78,7 @@ export class ApprovalService {
     entryCriteria?: unknown; finalApproveActions?: unknown[]; finalRejectActions?: unknown[];
     steps?: Array<{ order: number; name: string; approverSource: ApproverSource; approverConfig: unknown; mode?: ApprovalStepMode; rejectBehavior?: string }>;
   }) {
-    const { steps, ...rest } = data;
+    const { steps, finalApproveActions, finalRejectActions, entryCriteria, ...rest } = data;
     if (steps) {
       await this.prisma.approvalStep.deleteMany({ where: { processId: id } });
       await this.prisma.approvalStep.createMany({
@@ -87,7 +87,12 @@ export class ApprovalService {
     }
     return this.prisma.approvalProcess.update({
       where: { id, tenantId },
-      data: { ...rest, entryCriteria: rest.entryCriteria as object | undefined },
+      data: {
+        ...rest,
+        ...(entryCriteria !== undefined ? { entryCriteria: entryCriteria as object } : {}),
+        ...(finalApproveActions !== undefined ? { finalApproveActions: finalApproveActions as object[] } : {}),
+        ...(finalRejectActions !== undefined ? { finalRejectActions: finalRejectActions as object[] } : {}),
+      },
       include: { steps: { orderBy: { order: 'asc' } } },
     });
   }

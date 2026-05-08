@@ -7,13 +7,13 @@ import { Account } from '../account/account.type';
 @ObjectType()
 export class Contact {
   @Field(() => ID)
-  id: string;
+  id!: string;
 
   @Field()
-  tenantId: string;
+  tenantId!: string;
 
   @Field()
-  ownerId: string;
+  ownerId!: string;
 
   @Field(() => User, { nullable: true })
   owner?: User;
@@ -31,7 +31,7 @@ export class Contact {
   firstName?: string;
 
   @Field()
-  lastName: string;
+  lastName!: string;
 
   @Field({ nullable: true })
   title?: string;
@@ -61,10 +61,10 @@ export class Contact {
   customData?: any;
 
   @Field(() => GraphQLISODateTime)
-  createdAt: Date;
+  createdAt!: Date;
 
   @Field(() => GraphQLISODateTime)
-  updatedAt: Date;
+  updatedAt!: Date;
 }
 
 @ObjectType()

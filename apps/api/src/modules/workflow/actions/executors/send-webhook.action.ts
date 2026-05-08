@@ -67,11 +67,34 @@ export class SendWebhookAction implements ActionExecutor {
       ? createHmac('sha256', secret).update(`${timestamp}.${body}`).digest('hex')
       : '';
 
+    // W3C trace-context propagation: prefer the traceparent that was
+    // captured at outbox-emit / workflow-trigger time (so the inbound
+    // API call → workflow → webhook delivery all share one trace tree).
+    // Fall back to the currently-active span — still useful, and works
+    // for ad-hoc webhook actions that didn't go through the workflow
+    // trigger pipeline.
+    let traceparent = ctx.extra?.['traceparent'] as string | undefined;
+    if (!traceparent) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const otel = require('@opentelemetry/api');
+        const span = otel.trace?.getSpan?.(otel.context?.active?.());
+        const sc = span?.spanContext?.();
+        if (sc?.traceId && sc?.spanId) {
+          const flags = (sc.traceFlags ?? 0).toString(16).padStart(2, '0');
+          traceparent = `00-${sc.traceId}-${sc.spanId}-${flags}`;
+        }
+      } catch {
+        // OTel optional
+      }
+    }
+
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'X-Idempotency-Key': idempotencyKey,
       'X-Tokenwave-Timestamp': timestamp,
       ...(signature ? { 'X-Tokenwave-Signature': `sha256=${signature}` } : {}),
+      ...(traceparent ? { traceparent } : {}),
       ...baseHeaders,
     };
 

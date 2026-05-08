@@ -8,6 +8,7 @@ import type { RequestUser } from './types/request-context';
 import { OutboxService } from './outbox.service';
 import { RecycleBinService } from '../modules/recycle-bin/recycle-bin.service';
 import type { EmbeddingService } from '../modules/embeddings/embedding.service';
+import { FieldHistoryService } from './field-history.service';
 
 /** Shared by all LTC entity services for consistent workflow/audit behaviour. */
 export abstract class BaseEntityService {
@@ -18,6 +19,14 @@ export abstract class BaseEntityService {
    * or call `afterSoftDelete` after their soft-delete write.
    */
   protected readonly recycleBin?: RecycleBinService;
+
+  /**
+   * FieldHistoryService is optional for the same reason — extending services
+   * compiled before Wave 18b wired FieldHistoryModule into AppModule should
+   * keep working. When present, every afterUpdate writes a row per changed
+   * field into `field_history`.
+   */
+  protected readonly fieldHistory?: FieldHistoryService;
 
   /**
    * Optional semantic-search hook. Subclasses that want their records
@@ -33,8 +42,10 @@ export abstract class BaseEntityService {
     protected readonly emitter: EventEmitter2,
     protected readonly outbox: OutboxService,
     @Optional() recycleBin?: RecycleBinService,
+    @Optional() fieldHistory?: FieldHistoryService,
   ) {
     this.recycleBin = recycleBin;
+    this.fieldHistory = fieldHistory;
   }
 
   /**
@@ -102,6 +113,9 @@ export abstract class BaseEntityService {
   ) {
     const changes = this.audit.diff(previous, record);
     await this.audit.log({ tenantId, actorId: user?.id, action: 'update', recordType: objectApiName, recordId: record['id'] as string, changes });
+    if (this.fieldHistory && Object.keys(changes).length > 0) {
+      await this.fieldHistory.record(tenantId, objectApiName, record['id'] as string, changes, user?.id);
+    }
     await this.outbox.emit(tenantId, `${objectApiName}.updated`, objectApiName, record['id'] as string, record);
     await this.workflow.trigger({ tenantId, objectApiName, trigger: WorkflowTrigger.ON_UPDATE, record, previous, user });
     await this.workflow.trigger({ tenantId, objectApiName, trigger: WorkflowTrigger.ON_FIELD_CHANGE, record, previous, user });

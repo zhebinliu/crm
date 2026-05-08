@@ -21,7 +21,7 @@ export class ValidationRuleResolver {
     @Args('skip', { type: () => Int, nullable: true }) skip?: number,
     @Args('take', { type: () => Int, nullable: true }) take?: number,
   ) {
-    const res = await this.validationRuleService.list(user.tenantId, { skip, take });
+    const res = await this.validationRuleService.listPaginated(user.tenantId, { skip, take });
     return { data: res.data, total: res.total };
   }
 
@@ -37,20 +37,20 @@ export class ValidationRuleResolver {
   @Mutation(() => ValidationRule)
   @RequirePermissions('validationRule.write')
   async createValidationRule(
-    @GqlCurrentUser() user: RequestUser,
+    @GqlCurrentUser() _user: RequestUser,
     @Args('input') input: CreateValidationRuleInput,
   ) {
-    return this.validationRuleService.create(user.tenantId, input as any, user);
+    return this.validationRuleService.create(_user.tenantId, input as any);
   }
 
   @Mutation(() => ValidationRule)
   @RequirePermissions('validationRule.write')
   async updateValidationRule(
-    @GqlCurrentUser() user: RequestUser,
+    @GqlCurrentUser() _user: RequestUser,
     @Args('id', { type: () => ID }) id: string,
     @Args('input') input: UpdateValidationRuleInput,
   ) {
-    return this.validationRuleService.update(user.tenantId, id, input as any, user);
+    return this.validationRuleService.update(_user.tenantId, id, input as any);
   }
 
   @Mutation(() => Boolean)

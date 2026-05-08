@@ -56,7 +56,15 @@ export class WorkflowService {
       if (rule.runSync) {
         await this.executeRule(rule, ctx);
       } else {
-        await this.queue.add('run-rule', { ruleId: rule.id, ctx }, { priority: rule.priority });
+        // Wave 18b1: tag jobs with tenantId so per-tenant fairness can be
+        // enforced downstream (rate-limiting, observability, future
+        // per-tenant queue split). The processor reads `data.tenantId`.
+        // Job name is also prefixed with the tenant for easy log filtering.
+        await this.queue.add(
+          `run-rule:${ctx.tenantId}`,
+          { tenantId: ctx.tenantId, ruleId: rule.id, ctx },
+          { priority: rule.priority },
+        );
       }
     }
   }
@@ -67,6 +75,23 @@ export class WorkflowService {
     ctx: TriggerContext,
   ): Promise<void> {
     const startedAt = Date.now();
+    // Capture the active OTel trace context at rule-execution time. Passed
+    // through `extra.traceparent` so SendWebhookAction can forward it as
+    // an HTTP header → receiving system can continue the same trace.
+    let traceparent: string | undefined;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const otel = require('@opentelemetry/api');
+      const span = otel.trace?.getSpan?.(otel.context?.active?.());
+      const sc = span?.spanContext?.();
+      if (sc?.traceId && sc?.spanId) {
+        const flags = (sc.traceFlags ?? 0).toString(16).padStart(2, '0');
+        traceparent = `00-${sc.traceId}-${sc.spanId}-${flags}`;
+      }
+    } catch {
+      // OTel optional
+    }
+
     const evalCtx: EvalContext = {
       record: ctx.record,
       previous: ctx.previous,
@@ -76,8 +101,15 @@ export class WorkflowService {
         objectApiName: ctx.objectApiName,
         recordId: ctx.record['id'] as string,
         event: ctx.trigger,
+        ...(traceparent ? { traceparent } : {}),
       },
     };
+
+    // Evaluate the rule's condition tree; an empty/missing tree is treated as
+    // "always run" to preserve historical behavior.
+    const conditionsMet = rule.conditions
+      ? evaluate(rule.conditions as ConditionNode, evalCtx)
+      : true;
 
     if (!conditionsMet) {
       await this.persistExecution(rule.id, ctx, WorkflowStatus.SKIPPED, false, [], undefined, startedAt);
@@ -137,6 +169,26 @@ export class WorkflowService {
     });
   }
 
+  /** Paginated variant for the GraphQL resolver (same WHERE shape as `list`). */
+  async listPaginated(
+    tenantId: string,
+    opts: { objectApiName?: string; skip?: number; take?: number } = {},
+  ) {
+    const { objectApiName, skip, take } = opts;
+    const where = { tenantId, ...(objectApiName ? { objectApiName } : {}) };
+    const [data, total] = await this.prisma.$transaction([
+      this.prisma.workflowRule.findMany({
+        where,
+        orderBy: [{ objectApiName: 'asc' }, { priority: 'asc' }],
+        include: { _count: { select: { executions: true } } },
+        ...(skip !== undefined ? { skip } : {}),
+        ...(take !== undefined ? { take } : {}),
+      }),
+      this.prisma.workflowRule.count({ where }),
+    ]);
+    return { data, total };
+  }
+
   get(tenantId: string, id: string) {
     return this.prisma.workflowRule.findFirstOrThrow({ where: { id, tenantId } });
   }
@@ -167,6 +219,19 @@ export class WorkflowService {
 
   async remove(tenantId: string, id: string) {
     await this.prisma.workflowRule.delete({ where: { id } });
+    return { ok: true };
+  }
+
+  /**
+   * Soft-delete by toggling `isActive` to false. WorkflowRule has no
+   * `deletedAt` column, so we deactivate instead — matches the
+   * "rule is no longer in effect" semantics callers expect.
+   */
+  async softDelete(tenantId: string, id: string) {
+    await this.prisma.workflowRule.update({
+      where: { id, tenantId },
+      data: { isActive: false },
+    });
     return { ok: true };
   }
 

@@ -6,13 +6,13 @@ import { User } from '../user/user.type';
 @ObjectType()
 export class Lead {
   @Field(() => ID)
-  id: string;
+  id!: string;
 
   @Field()
-  tenantId: string;
+  tenantId!: string;
 
   @Field()
-  ownerId: string;
+  ownerId!: string;
 
   @Field(() => User, { nullable: true })
   owner?: User;
@@ -21,10 +21,10 @@ export class Lead {
   firstName?: string;
 
   @Field()
-  lastName: string;
+  lastName!: string;
 
   @Field()
-  company: string;
+  company!: string;
 
   @Field({ nullable: true })
   title?: string;
@@ -42,7 +42,7 @@ export class Lead {
   website?: string;
 
   @Field()
-  status: string;
+  status!: string;
 
   @Field({ nullable: true })
   rating?: string;
@@ -66,7 +66,7 @@ export class Lead {
   customData?: any;
 
   @Field()
-  isConverted: boolean;
+  isConverted!: boolean;
 
   @Field({ nullable: true })
   convertedAccountId?: string;
@@ -81,10 +81,10 @@ export class Lead {
   convertedAt?: Date;
 
   @Field(() => GraphQLISODateTime)
-  createdAt: Date;
+  createdAt!: Date;
 
   @Field(() => GraphQLISODateTime)
-  updatedAt: Date;
+  updatedAt!: Date;
 }
 
 @ObjectType()

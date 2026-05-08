@@ -4,7 +4,7 @@ import GraphQLJSON from 'graphql-type-json';
 @InputType()
 export class CreateAccountInput {
   @Field()
-  name: string;
+  name!: string;
 
   @Field({ nullable: true })
   type?: string;

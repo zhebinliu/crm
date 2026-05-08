@@ -10,28 +10,28 @@ registerEnumType(ActivityStatus, { name: 'ActivityStatus' });
 @ObjectType()
 export class Activity {
   @Field(() => ID)
-  id: string;
+  id!: string;
 
   @Field()
-  tenantId: string;
+  tenantId!: string;
 
   @Field()
-  ownerId: string;
+  ownerId!: string;
 
   @Field(() => User, { nullable: true })
   owner?: User;
 
   @Field(() => ActivityType)
-  type: ActivityType;
+  type!: ActivityType;
 
   @Field()
-  subject: string;
+  subject!: string;
 
   @Field(() => ActivityStatus)
-  status: ActivityStatus;
+  status!: ActivityStatus;
 
   @Field()
-  priority: string;
+  priority!: string;
 
   @Field(() => GraphQLISODateTime, { nullable: true })
   dueDate?: Date;
@@ -61,10 +61,10 @@ export class Activity {
   customData?: any;
 
   @Field(() => GraphQLISODateTime)
-  createdAt: Date;
+  createdAt!: Date;
 
   @Field(() => GraphQLISODateTime)
-  updatedAt: Date;
+  updatedAt!: Date;
 }
 
 @ObjectType()

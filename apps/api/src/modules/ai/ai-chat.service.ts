@@ -14,6 +14,8 @@ import { ClaudeClient, type ChatTurn, type ChatBlock } from './claude.client';
 import { COPILOT_TOOLS, COPILOT_TOOL_BY_NAME, type CopilotContext } from './copilot-tools';
 import { AiService } from './ai.service';
 import { EmbeddingService, type SimilarityHit } from '../embeddings/embedding.service';
+import { PiiRedactorService, type RedactionMappings } from './pii-redactor.service';
+import { RagRerankerService } from './rag-reranker.service';
 
 // What the client sends in / receives back. Keep this stable — UI renders it.
 
@@ -32,10 +34,25 @@ export interface ChatMessage {
   }>;
 }
 
+/**
+ * A grounded citation extracted from the assistant's text. The model emits
+ * inline `[citation:<recordType>:<recordId>]` markers; we parse them out,
+ * validate against this tenant, and surface them as a structured array so
+ * the UI can render footnotes / link chips.
+ */
+export interface AiCitation {
+  recordType: string;
+  recordId: string;
+  /** [start, end) byte offsets of the marker in the FINAL response text. */
+  position: [number, number];
+}
+
 export interface ChatResponse {
   assistant: ChatMessage;
   /** Full conversation history including the new turn — UI can drop its old copy. */
   history: ChatMessage[];
+  /** Inline source citations the assistant grounded its answer on. */
+  citations: AiCitation[];
   meta: {
     modelName: string;
     source: 'live' | 'stub';
@@ -72,6 +89,14 @@ const COPILOT_SYSTEM_PROMPT = `你是「纷享销客」CRM 系统的 AI 销售�
 - 用具体数据（"3 个商机，合计 86 万"）而不是模糊话术（"有一些商机"）。
 - 给行动建议时用动词开头的祈使句。
 
+**引用规则（重要）**：
+- 每当你引用具体的客户、商机、线索、联系人、案例等记录时，**必须**在该处后紧跟一个引用标记，格式为 \`[citation:<recordType>:<recordId>]\`。
+- recordType 取值：account / opportunity / lead / contact / case / activity。
+- recordId 来自工具返回的数据，或来自下文「Relevant records」检索结果中的 \`[recordType:recordId]\` 头。
+- 示例：「客户北京飞鸟科技 [citation:account:cmovxxxxx] 的预计签约金额是 ¥50万 [citation:opportunity:cmovyyyyy]」。
+- 如果你说的内容不基于任何具体记录（例如通用建议），不要加 citation。
+- 不要伪造 recordId — 只引用真实存在于工具结果或检索上下文中的 ID。
+
 可用工具列表已在 tools 字段提供。先调用相关工具，再回答。`;
 
 const MAX_ITERATIONS = 6; // Hard cap to prevent runaway tool loops.
@@ -85,33 +110,162 @@ export class AiChatService {
     private readonly claude: ClaudeClient,
     private readonly ai: AiService,
     private readonly embeddings: EmbeddingService,
+    private readonly redactor: PiiRedactorService,
+    private readonly reranker: RagRerankerService,
   ) {}
 
   /**
    * Build the RAG-grounded system prompt: base copilot instructions + a
-   * "Relevant records" block from semantic search. Conservative: if
-   * retrieval yields nothing or errors, returns the unmodified base
-   * prompt and we behave exactly like the pre-RAG path.
+   * "Relevant records" block from semantic search, then second-stage
+   * reranked. PII is redacted in the included snippets before they hit
+   * the LLM. Returns the prompt plus the merged redaction mapping (so
+   * callers can unredact LLM output).
+   *
+   * Conservative: if retrieval yields nothing or errors, returns the
+   * unmodified base prompt and we behave exactly like the pre-RAG path.
    */
   private async buildGroundedSystemPrompt(
     tenantId: string,
     userMessage: string,
-  ): Promise<string> {
+  ): Promise<{ prompt: string; mappings: RedactionMappings; hits: SimilarityHit[] }> {
     let hits: SimilarityHit[] = [];
     try {
-      hits = await this.embeddings.searchSimilar(tenantId, null, userMessage, 8);
+      // Stage 1: cosine top-K (wider net than we'll inject — reranker trims).
+      hits = await this.embeddings.searchSimilar(tenantId, null, userMessage, 20);
     } catch (err) {
       this.logger.warn(`RAG retrieval failed; falling back to ungrounded prompt: ${(err as Error).message}`);
-      return COPILOT_SYSTEM_PROMPT;
+      return { prompt: COPILOT_SYSTEM_PROMPT, mappings: {}, hits: [] };
     }
-    if (hits.length === 0) return COPILOT_SYSTEM_PROMPT;
+    if (hits.length === 0) return { prompt: COPILOT_SYSTEM_PROMPT, mappings: {}, hits: [] };
 
-    const lines = hits.map((h) => {
+    // Stage 2: rerank to top-8.
+    let reranked: SimilarityHit[] = hits;
+    try {
+      reranked = await this.reranker.rerank(userMessage, hits, 8);
+    } catch (err) {
+      this.logger.warn(`Rerank failed; using cosine order: ${(err as Error).message}`);
+      reranked = hits.slice(0, 8);
+    }
+
+    const merged: RedactionMappings = {};
+    const lines = reranked.map((h) => {
       // Truncate per-hit content to keep the prompt token-cheap.
       const snippet = h.content.length > 240 ? h.content.slice(0, 240) + '…' : h.content;
-      return `- [${h.recordType}:${h.recordId}] ${snippet}`;
+      const { text: safe, mappings } = this.redactor.redact(snippet);
+      // Mappings produced per-hit can collide on placeholder names since
+      // each redact() call restarts indices; namespace them by hit so the
+      // global mapping has unique keys.
+      for (const [ph, raw] of Object.entries(mappings)) {
+        // Keep the first-encountered original for any placeholder text.
+        if (!(ph in merged)) merged[ph] = raw;
+      }
+      return `- [${h.recordType}:${h.recordId}] ${safe}`;
     });
-    return `${COPILOT_SYSTEM_PROMPT}\n\n## Relevant records (retrieved from this tenant via semantic search)\n${lines.join('\n')}\n\n用上述相关记录辅助回答；如果上下文不足，再调用工具补充。`;
+
+    const prompt = `${COPILOT_SYSTEM_PROMPT}\n\n## Relevant records (retrieved from this tenant via semantic search)\n${lines.join('\n')}\n\n用上述相关记录辅助回答；如果上下文不足，再调用工具补充。`;
+    return { prompt, mappings: merged, hits: reranked };
+  }
+
+  /**
+   * Extract `[citation:<recordType>:<recordId>]` markers from assistant
+   * text and validate each against the tenant. Returns a structured array
+   * AND the cleaned text with invalid markers removed.
+   */
+  private async extractCitations(
+    tenantId: string,
+    text: string,
+  ): Promise<{ text: string; citations: AiCitation[] }> {
+    if (!text) return { text: '', citations: [] };
+    const re = /\[citation:([a-zA-Z_]+):([A-Za-z0-9_-]+)\]/g;
+    type Raw = { recordType: string; recordId: string; start: number; end: number };
+    const raws: Raw[] = [];
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text))) {
+      raws.push({
+        recordType: (m[1] ?? '').toLowerCase(),
+        recordId: m[2] ?? '',
+        start: m.index,
+        end: m.index + m[0].length,
+      });
+    }
+    if (raws.length === 0) return { text, citations: [] };
+
+    // Validate: recordType must be known + recordId must belong to tenant.
+    const knownTypes = new Set(['account', 'opportunity', 'lead', 'contact', 'case', 'activity']);
+    const idsByType = new Map<string, Set<string>>();
+    for (const r of raws) {
+      if (!knownTypes.has(r.recordType)) continue;
+      if (!idsByType.has(r.recordType)) idsByType.set(r.recordType, new Set());
+      idsByType.get(r.recordType)!.add(r.recordId);
+    }
+
+    const validIds = new Map<string, Set<string>>();
+    for (const [type, ids] of idsByType.entries()) {
+      const list = Array.from(ids);
+      try {
+        let rows: Array<{ id: string }> = [];
+        switch (type) {
+          case 'account':
+            rows = await this.prisma.account.findMany({
+              where: { tenantId, id: { in: list } }, select: { id: true },
+            });
+            break;
+          case 'opportunity':
+            rows = await this.prisma.opportunity.findMany({
+              where: { tenantId, id: { in: list } }, select: { id: true },
+            });
+            break;
+          case 'lead':
+            rows = await this.prisma.lead.findMany({
+              where: { tenantId, id: { in: list } }, select: { id: true },
+            });
+            break;
+          case 'contact':
+            rows = await this.prisma.contact.findMany({
+              where: { tenantId, id: { in: list } }, select: { id: true },
+            });
+            break;
+          case 'case':
+            rows = await this.prisma.case.findMany({
+              where: { tenantId, id: { in: list } }, select: { id: true },
+            });
+            break;
+          case 'activity':
+            rows = await this.prisma.activity.findMany({
+              where: { tenantId, id: { in: list } }, select: { id: true },
+            });
+            break;
+        }
+        validIds.set(type, new Set(rows.map((r) => r.id)));
+      } catch (err) {
+        this.logger.warn(`citation validate ${type} failed: ${(err as Error).message}`);
+        validIds.set(type, new Set());
+      }
+    }
+
+    // Walk raws in order; build cleaned text by stripping invalid markers and
+    // recording final positions of valid ones.
+    const citations: AiCitation[] = [];
+    let cleaned = '';
+    let cursor = 0;
+    for (const r of raws) {
+      cleaned += text.slice(cursor, r.start);
+      const ok = knownTypes.has(r.recordType) && (validIds.get(r.recordType)?.has(r.recordId) ?? false);
+      if (ok) {
+        const startInCleaned = cleaned.length;
+        const marker = text.slice(r.start, r.end);
+        cleaned += marker;
+        citations.push({
+          recordType: r.recordType,
+          recordId: r.recordId,
+          position: [startInCleaned, startInCleaned + marker.length],
+        });
+      }
+      // else: drop the invalid marker entirely.
+      cursor = r.end;
+    }
+    cleaned += text.slice(cursor);
+    return { text: cleaned, citations };
   }
 
   async chat(args: {
@@ -144,10 +298,12 @@ export class AiChatService {
       { role: 'user', content: args.message },
     ];
 
-    // RAG: retrieve top-K semantically-similar records for this tenant and
-    // splice them into the system prompt. Falls back silently to the base
-    // prompt if retrieval is empty or errors.
-    const groundedSystemPrompt = await this.buildGroundedSystemPrompt(args.tenantId, args.message);
+    // RAG: retrieve top-K semantically-similar records for this tenant,
+    // rerank, redact PII, and splice into the system prompt. Falls back
+    // silently to the base prompt if retrieval is empty or errors.
+    const grounded = await this.buildGroundedSystemPrompt(args.tenantId, args.message);
+    const groundedSystemPrompt = grounded.prompt;
+    const piiMappings = grounded.mappings;
 
     const toolEvents: ChatMessage['toolEvents'] = [];
     let finalText = '';
@@ -253,6 +409,17 @@ export class AiChatService {
       finalText = '⚠️ 我反复调用工具但没能给出最终答复，请换一种问法或简化问题。';
     }
 
+    // Reverse PII placeholders the LLM might have echoed back (best effort —
+    // not all placeholders are user-facing data we'd want to restore, but
+    // for record content like emails this lets the UI show the real value).
+    if (Object.keys(piiMappings).length > 0) {
+      finalText = this.redactor.unredact(finalText, piiMappings);
+    }
+
+    // Extract grounded citations and strip invalid markers.
+    const { text: cleanedText, citations } = await this.extractCitations(args.tenantId, finalText);
+    finalText = cleanedText;
+
     const assistant: ChatMessage = {
       role: 'assistant',
       text: finalText,
@@ -268,6 +435,7 @@ export class AiChatService {
     return {
       assistant,
       history,
+      citations,
       meta: {
         modelName,
         source,
@@ -308,7 +476,9 @@ export class AiChatService {
     const toolEvents: NonNullable<ChatMessage['toolEvents']> = [];
 
     // RAG-grounded system prompt for streaming variant.
-    const groundedSystemPrompt = await this.buildGroundedSystemPrompt(args.tenantId, args.message);
+    const groundedStream = await this.buildGroundedSystemPrompt(args.tenantId, args.message);
+    const groundedSystemPrompt = groundedStream.prompt;
+    const piiMappings = groundedStream.mappings;
 
     let finalText = '';
     let iterations = 0;
@@ -382,6 +552,12 @@ export class AiChatService {
         emit({ type: 'token', text: finalText });
       }
 
+      if (Object.keys(piiMappings).length > 0) {
+        finalText = this.redactor.unredact(finalText, piiMappings);
+      }
+      const { text: cleanedText, citations } = await this.extractCitations(args.tenantId, finalText);
+      finalText = cleanedText;
+
       const assistant: ChatMessage = {
         role: 'assistant',
         text: finalText,
@@ -397,6 +573,7 @@ export class AiChatService {
         type: 'done',
         assistant,
         history,
+        citations,
         meta: {
           modelName,
           source,
@@ -418,5 +595,5 @@ export type ChatStreamEvent =
   | { type: 'turn_break' }
   | { type: 'tool_call_start'; name: string; input: unknown }
   | { type: 'tool_call_end'; name: string; durationMs: number; isError?: boolean }
-  | { type: 'done'; assistant: ChatMessage; history: ChatMessage[]; meta: ChatResponse['meta'] }
+  | { type: 'done'; assistant: ChatMessage; history: ChatMessage[]; citations: AiCitation[]; meta: ChatResponse['meta'] }
   | { type: 'error'; message: string };

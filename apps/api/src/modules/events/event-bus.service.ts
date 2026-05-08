@@ -34,6 +34,12 @@ interface EventEnvelope {
   payload: unknown;
   at: string;             // ISO timestamp
   outboxId: string;
+  /**
+   * W3C trace-context header captured at outbox emit() time. Forwarded
+   * to PubSub subscribers and Redis stream entries so downstream
+   * consumers (workflows, webhook delivery) can stitch the trace tree.
+   */
+  traceparent?: string;
 }
 
 @Injectable()
@@ -90,6 +96,15 @@ export class EventBusService implements OnModuleInit, OnModuleDestroy {
       });
       if (batch.length === 0) return;
       for (const row of batch) {
+        // OutboxService stamps the active trace context as `_traceparent`
+        // on the payload at emit() time. Surface it as a first-class
+        // envelope field so subscribers (and Redis-stream consumers in
+        // other processes) don't have to know it lives in the payload.
+        const rowPayload = row.payload as Record<string, unknown> | null | undefined;
+        const traceparent =
+          rowPayload && typeof rowPayload === 'object' && typeof rowPayload['_traceparent'] === 'string'
+            ? (rowPayload['_traceparent'] as string)
+            : undefined;
         const envelope: EventEnvelope = {
           event: this.toPlatformName(row.eventType),
           tenantId: row.tenantId,
@@ -98,6 +113,7 @@ export class EventBusService implements OnModuleInit, OnModuleDestroy {
           payload: row.payload,
           at: row.createdAt.toISOString(),
           outboxId: row.id,
+          ...(traceparent ? { traceparent } : {}),
         };
         try {
           await this.dispatch(envelope);
@@ -128,18 +144,24 @@ export class EventBusService implements OnModuleInit, OnModuleDestroy {
 
     // Redis Streams — durable cross-process queue
     if (this.redis) {
-      await this.redis.xadd(
-        `events:${envelope.tenantId}`,
-        'MAXLEN',
-        '~',
-        STREAM_MAXLEN.toString(),
-        '*',
+      const fields: string[] = [
         'event', envelope.event,
         'recordType', envelope.recordType,
         'recordId', envelope.recordId,
         'at', envelope.at,
         'outboxId', envelope.outboxId,
         'payload', JSON.stringify(envelope.payload),
+      ];
+      if (envelope.traceparent) {
+        fields.push('traceparent', envelope.traceparent);
+      }
+      await this.redis.xadd(
+        `events:${envelope.tenantId}`,
+        'MAXLEN',
+        '~',
+        STREAM_MAXLEN.toString(),
+        '*',
+        ...fields,
       );
     }
   }

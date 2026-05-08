@@ -14,9 +14,10 @@
 // Embedding pipeline is fire-and-forget from caller writes — it must
 // never block or fail a record create/update. Errors are logged.
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PiiRedactorService } from '../ai/pii-redactor.service';
 
 const EMBED_MODEL = 'text-embedding-3-small';
 const EMBED_DIM = 1536;
@@ -34,7 +35,12 @@ export class EmbeddingService {
   private readonly logger = new Logger(EmbeddingService.name);
   private warnedNoKey = false;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    // Optional so this module can be loaded standalone (e.g. before AiModule
+    // registers the redactor in tests). When absent, content is embedded raw.
+    @Optional() private readonly redactor?: PiiRedactorService,
+  ) {}
 
   // ── Public API ────────────────────────────────────────────────────────
 
@@ -96,8 +102,14 @@ export class EmbeddingService {
     content: string,
   ): Promise<void> {
     try {
-      const trimmed = (content ?? '').trim();
+      let trimmed = (content ?? '').trim();
       if (!trimmed) return;
+      // PII guard: redact before sending to OpenAI's embedding API. Embedding
+      // semantics are preserved (token-level redaction doesn't change topic
+      // similarity) and the placeholder text is what's stored.
+      if (this.redactor && this.redactor.isEnabled()) {
+        trimmed = this.redactor.redact(trimmed).text;
+      }
       const contentHash = sha256(trimmed);
 
       const existing = await this.prisma.recordEmbedding.findUnique({

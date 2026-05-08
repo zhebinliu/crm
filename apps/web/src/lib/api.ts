@@ -360,6 +360,60 @@ export const aiApi = {
   },
 };
 
+// ── Person / Customer 360 (Wave 18h) ───────────────────────────────────────
+
+export const personApi = {
+  list: (p?: { search?: string; skip?: number; take?: number }) =>
+    api.get('/persons', { params: p }).then((r) => r.data),
+  get: (id: string) => api.get(`/persons/${id}`).then((r) => r.data),
+  timeline: (id: string, take?: number) =>
+    api.get(`/persons/${id}/timeline`, { params: take ? { take } : {} }).then((r) => r.data),
+  merge: (winnerId: string, loserId: string) =>
+    api.post('/persons/merge', { winnerId, loserId }).then((r) => r.data),
+  listDedupeCandidates: (status?: string, take?: number) =>
+    api.get('/persons/dedupe/candidates', { params: { status, take } }).then((r) => r.data),
+  resolveDedupeCandidate: (id: string, decision: 'confirm_merge' | 'reject', note?: string) =>
+    api.post(`/persons/dedupe/candidates/${id}/resolve`, { decision, note }).then((r) => r.data),
+};
+
+// ── Recycle Bin (Wave 16b) ─────────────────────────────────────────────────
+
+export const recycleBinApi = {
+  list: (p?: { recordType?: string; search?: string; skip?: number; take?: number }) =>
+    api.get('/recycle-bin', { params: p }).then((r) => r.data),
+  restore: (id: string) => api.post(`/recycle-bin/${id}/restore`).then((r) => r.data),
+  purge: (id: string) => api.delete(`/recycle-bin/${id}`).then((r) => r.data),
+};
+
+// ── GDPR data subject portal (Wave 16d) ────────────────────────────────────
+
+export const gdprApi = {
+  exportData: (personId: string) =>
+    api.post(`/persons/${personId}/export`).then((r) => r.data),
+  // The controller requires { confirm: true, reason } in the body. The query
+  // string `?reason=` is also accepted but the body fields are mandatory.
+  erase: (personId: string, reason: string) =>
+    api
+      .delete(`/persons/${personId}`, {
+        params: { reason },
+        data: { confirm: true, reason },
+      })
+      .then((r) => r.data),
+};
+
+// ── Webhook DLQ admin ──────────────────────────────────────────────────────
+
+export const webhookDlqApi = {
+  list: (resolved: boolean, take?: number) =>
+    api
+      .get('/admin/webhook-dlq', { params: { resolved: String(resolved), take } })
+      .then((r) => r.data),
+  replay: (id: string) =>
+    api.post(`/admin/webhook-dlq/${id}/replay`).then((r) => r.data),
+  resolve: (id: string, note?: string) =>
+    api.post(`/admin/webhook-dlq/${id}/resolve`, { note }).then((r) => r.data),
+};
+
 export const genericApi = {
   list: (objName: string, p?: Record<string, unknown>) => api.get(`/records/${objName}`, { params: p }).then(r => r.data),
   get: (objName: string, id: string) => api.get(`/records/${objName}/${id}`).then(r => r.data),

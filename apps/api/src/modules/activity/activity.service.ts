@@ -20,6 +20,8 @@ export interface ActivityListOptions {
   status?: string;
   type?: string;
   dueBefore?: Date | string;
+  /** Free-text search; currently unused by the service, accepted for resolver parity. */
+  search?: string;
   skip?: number;
   take?: number;
 }

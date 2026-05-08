@@ -4,13 +4,13 @@ import { FieldType } from '@prisma/client';
 @InputType()
 export class CreateObjectInput {
   @Field()
-  apiName: string;
+  apiName!: string;
 
   @Field()
-  label: string;
+  label!: string;
 
   @Field()
-  labelPlural: string;
+  labelPlural!: string;
 
   @Field({ nullable: true })
   iconName?: string;
@@ -19,13 +19,13 @@ export class CreateObjectInput {
 @InputType()
 export class CreateFieldInput {
   @Field()
-  apiName: string;
+  apiName!: string;
 
   @Field()
-  label: string;
+  label!: string;
 
   @Field(() => FieldType)
-  type: FieldType;
+  type!: FieldType;
 
   @Field({ nullable: true })
   required?: boolean;

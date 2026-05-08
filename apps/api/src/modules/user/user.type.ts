@@ -5,16 +5,16 @@ import { Role } from '../role/role.type';
 @ObjectType()
 export class User {
   @Field(() => ID)
-  id: string;
+  id!: string;
 
   @Field()
-  tenantId: string;
+  tenantId!: string;
 
   @Field()
-  email: string;
+  email!: string;
 
   @Field()
-  displayName: string;
+  displayName!: string;
 
   @Field({ nullable: true })
   avatarUrl?: string;
@@ -32,22 +32,22 @@ export class User {
   managerId?: string;
 
   @Field()
-  isActive: boolean;
+  isActive!: boolean;
 
   @Field(() => GraphQLISODateTime, { nullable: true })
   lastLoginAt?: Date;
 
   @Field()
-  locale: string;
+  locale!: string;
 
   @Field()
-  timezone: string;
+  timezone!: string;
 
   @Field(() => GraphQLISODateTime)
-  createdAt: Date;
+  createdAt!: Date;
 
   @Field(() => GraphQLISODateTime)
-  updatedAt: Date;
+  updatedAt!: Date;
 
   @Field(() => [String], { nullable: true })
   permissions?: string[];
