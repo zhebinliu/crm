@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -11,6 +11,7 @@ import { EVENTS } from '@tokenwave/shared';
 import type { RequestUser } from '../../common/types/request-context';
 import { RecycleBinService } from '../recycle-bin/recycle-bin.service';
 import { FlsService } from '../fls/fls.service';
+import { CurrencyService } from '../currency/currency.service';
 
 export interface OrderListOptions {
   accountId?: string;
@@ -31,6 +32,7 @@ export class OrderService extends BaseEntityService {
     outbox: OutboxService,
     recycleBin: RecycleBinService,
     private readonly fls: FlsService,
+    @Optional() private readonly currency?: CurrencyService,
   ) {
     super(workflow, validation, audit, emitter, outbox, recycleBin);
   }
@@ -94,6 +96,7 @@ export class OrderService extends BaseEntityService {
       },
     });
 
+    if (this.currency) void this.currency.applyAfterSave('order', tenantId, order.id);
     await this.afterCreate(tenantId, 'order', order as Record<string, unknown>, user);
     return order;
   }
@@ -142,6 +145,7 @@ export class OrderService extends BaseEntityService {
       include: { lineItems: true },
     });
 
+    if (this.currency) void this.currency.applyAfterSave('order', tenantId, order.id);
     await this.afterCreate(tenantId, 'order', order as Record<string, unknown>, user);
     return this.get(tenantId, order.id);
   }
@@ -154,6 +158,7 @@ export class OrderService extends BaseEntityService {
       where: { id },
       data: { ...(input as any), updatedById: user.id },
     });
+    if (this.currency) void this.currency.applyAfterSave('order', tenantId, id);
     await this.afterUpdate(tenantId, 'order', order as Record<string, unknown>, previous as Record<string, unknown>, user);
     return order;
   }

@@ -85,6 +85,8 @@ model Tenant {
   queues              Queue[]
   profiles            Profile[]
   permissionSets      PermissionSet[]
+  currencyRates       CurrencyRate[]
+  labelTranslations   LabelTranslation[]
 
   @@map("tenants")
 }
@@ -832,6 +834,8 @@ model Opportunity {
   stage            String   @default("prospecting") // picklist
   amount           Decimal? @db.Decimal(18, 2)
   currencyCode     String   @default("CNY")
+  // Auto-computed in tenant corporate currency (Wave 19g). Null when no rate.
+  convertedAmount  Decimal? @db.Decimal(18, 2)
   probability      Int      @default(10) // 0-100
   forecastCategory String   @default("pipeline") // pipeline/best_case/commit/closed
   closeDate        DateTime
@@ -1039,6 +1043,8 @@ model Quote {
   name         String
   status       String    @default("draft") // draft/in_review/approved/presented/accepted/rejected/expired
   currencyCode String    @default("CNY")
+  // Auto-computed in tenant corporate currency (Wave 19g). Null when no rate.
+  convertedAmount Decimal? @db.Decimal(18, 2)
   expiresAt    DateTime?
 
   subtotal       Decimal @default(0) @db.Decimal(18, 2)
@@ -1117,6 +1123,8 @@ model Order {
   endDate       DateTime?
   poNumber      String? // customer PO
   currencyCode  String    @default("CNY")
+  // Auto-computed in tenant corporate currency (Wave 19g). Null when no rate.
+  convertedAmount Decimal? @db.Decimal(18, 2)
 
   subtotal       Decimal @default(0) @db.Decimal(18, 2)
   discountAmount Decimal @default(0) @db.Decimal(18, 2)
@@ -2472,4 +2480,63 @@ model Queue {
 
   @@unique([tenantId, apiName])
   @@map("queues")
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// LOCALIZATION (Wave 19g)
+// ════════════════════════════════════════════════════════════════════════════
+//
+// Multi-currency exchange rates and metadata-label translations enable
+// international rollouts of the CRM. Both are tenant-scoped — every tenant
+// maintains its own FX table and its own per-locale label overrides.
+//
+// `Tenant.settings.corporateCurrency` (Json) is the conversion target for
+// `convertedAmount` rollups on Opportunity / Quote / Order. Defaults to "CNY".
+
+model CurrencyRate {
+  id            String    @id @default(cuid())
+  tenantId      String
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // 3-letter ISO 4217 codes — CNY, USD, EUR, JPY, ...
+  fromCurrency  String
+  toCurrency    String
+  // 1 unit fromCurrency = `rate` units toCurrency.
+  rate          Decimal   @db.Decimal(18, 8)
+  // Effective window. Multiple rows per (from,to) pair are allowed; the
+  // service picks the row whose effectiveFrom ≤ asOf and effectiveTo > asOf
+  // (or null = open).
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  source        String    @default("manual") // "manual" | "ecb" | "boc" — provenance
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([tenantId, fromCurrency, toCurrency, effectiveFrom])
+  @@index([tenantId, fromCurrency, toCurrency, effectiveFrom])
+  @@map("currency_rates")
+}
+
+model LabelTranslation {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // Polymorphic key:
+  //   entityType ∈ { "object", "field", "picklist", "picklist_value" }
+  //   entityId    = id of the corresponding ObjectDef / FieldDef / Picklist /
+  //                 PicklistValue row.
+  entityType  String
+  entityId    String
+  // BCP-47 locale: zh-CN, en-US, ja-JP, ...
+  locale      String
+  // Per-locale overrides — any of these may be null to fall back to the
+  // canonical column.
+  label       String?
+  description String?
+  helpText    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([tenantId, entityType, entityId, locale])
+  @@index([tenantId, entityType, locale])
+  @@map("label_translations")
 }

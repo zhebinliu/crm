@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -10,6 +10,7 @@ import { OutboxService } from '../../common/outbox.service';
 import type { RequestUser } from '../../common/types/request-context';
 import { RecycleBinService } from '../recycle-bin/recycle-bin.service';
 import { FlsService } from '../fls/fls.service';
+import { CurrencyService } from '../currency/currency.service';
 
 export interface QuoteListOptions {
   opportunityId?: string;
@@ -39,6 +40,7 @@ export class QuoteService extends BaseEntityService {
     outbox: OutboxService,
     recycleBin: RecycleBinService,
     private readonly fls: FlsService,
+    @Optional() private readonly currency?: CurrencyService,
   ) {
     super(workflow, validation, audit, emitter, outbox, recycleBin);
   }
@@ -104,6 +106,7 @@ export class QuoteService extends BaseEntityService {
       },
     });
 
+    if (this.currency) void this.currency.applyAfterSave('quote', tenantId, quote.id);
     await this.afterCreate(tenantId, 'quote', quote as Record<string, unknown>, user);
     return quote;
   }
@@ -146,6 +149,7 @@ export class QuoteService extends BaseEntityService {
     });
 
     await this.recalculateTotals(quote.id);
+    if (this.currency) void this.currency.applyAfterSave('quote', tenantId, quote.id);
     await this.afterCreate(tenantId, 'quote', quote as Record<string, unknown>, user);
     return this.get(tenantId, quote.id);
   }
@@ -158,6 +162,7 @@ export class QuoteService extends BaseEntityService {
       where: { id },
       data: { ...(input as any), updatedById: user.id },
     });
+    if (this.currency) void this.currency.applyAfterSave('quote', tenantId, id);
     await this.afterUpdate(tenantId, 'quote', quote as Record<string, unknown>, previous as Record<string, unknown>, user);
     return quote;
   }
@@ -213,10 +218,12 @@ export class QuoteService extends BaseEntityService {
     const shippingAmount = quote?.shippingAmount ?? new Decimal(0);
     const grandTotal = subtotal.minus(discountAmount).plus(taxAmount).plus(shippingAmount);
 
-    return this.prisma.quote.update({
+    const updated = await this.prisma.quote.update({
       where: { id: quoteId },
       data: { subtotal, taxAmount, grandTotal },
     });
+    if (this.currency) void this.currency.applyAfterSave('quote', updated.tenantId, quoteId);
+    return updated;
   }
 
   private async nextQuoteNumber(tenantId: string): Promise<string> {
