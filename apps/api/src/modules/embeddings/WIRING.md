@@ -46,8 +46,27 @@ import { EmbeddingsModule } from './modules/embeddings/embeddings.module';
 ## Optional env
 
 - `OPENAI_API_KEY` — when set, real `text-embedding-3-small` embeddings
-  are computed. When unset, a deterministic feature-hashing fallback is
-  used (works, but worse semantic quality).
+  are computed AND the OpenAI reranker (`gpt-4o-mini`) is used. When
+  unset, a deterministic feature-hashing fallback embedding + a BM25-style
+  lexical reranker are used.
+- `AI_RERANKER=lexical` — force the BM25 reranker even when an OpenAI key
+  is present (e.g. for offline tests / cost control).
+- `AI_RERANK_MODEL` — override the OpenAI reranker model
+  (default `gpt-4o-mini`).
+- `AI_REDACT_PII` — `false`/`0`/`off` disables PII redaction in prompts +
+  embeddings (debug only). Default ON.
+
+## Wave 18g additions (PII redactor + reranker + citations)
+
+- `AiModule` is now `@Global()` and exports `PiiRedactorService` and
+  `RagRerankerService`. `EmbeddingService` optionally injects the
+  redactor (no extra wiring needed once `AiModule` is registered).
+- `AiChatService` now: (1) retrieves top-20 cosine, (2) reranks to top-8,
+  (3) redacts PII in injected snippets, (4) extracts/validates inline
+  `[citation:type:id]` markers from the LLM response, returns
+  `{ assistant, history, citations, meta }` from `chat()`.
+- No `app.module.ts` changes required for Wave 18g — `AiModule` was
+  already imported in earlier waves and is now `@Global`.
 
 ## Endpoint
 
