@@ -13,7 +13,7 @@ import type { RequestUser } from '../../common/types/request-context';
 @Resolver(() => Lead)
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class LeadResolver {
-  constructor(private readonly leads: LeadService) {}
+  constructor(private readonly leadsService: LeadService) {}
 
   @Query(() => PaginatedLead)
   @RequirePermissions('lead.read')
@@ -26,7 +26,7 @@ export class LeadResolver {
     @Args('skip', { type: () => Int, nullable: true }) skip?: number,
     @Args('take', { type: () => Int, nullable: true }) take?: number,
   ) {
-    const res = await this.leads.list(user.tenantId, {
+    const res = await this.leadsService.list(user.tenantId, {
       search,
       status,
       ownerId,
@@ -43,7 +43,7 @@ export class LeadResolver {
     @GqlCurrentUser() user: RequestUser,
     @Args('id', { type: () => ID }) id: string,
   ) {
-    return this.leads.get(user.tenantId, id, user);
+    return this.leadsService.get(user.tenantId, id, user);
   }
 
   @Mutation(() => Lead)
@@ -52,7 +52,7 @@ export class LeadResolver {
     @GqlCurrentUser() user: RequestUser,
     @Args('input') input: CreateLeadInput,
   ) {
-    return this.leads.create(user.tenantId, input as any, user);
+    return this.leadsService.create(user.tenantId, input as any, user);
   }
 
   @Mutation(() => Lead)
@@ -62,7 +62,7 @@ export class LeadResolver {
     @Args('id', { type: () => ID }) id: string,
     @Args('input') input: UpdateLeadInput,
   ) {
-    return this.leads.update(user.tenantId, id, input as any, user);
+    return this.leadsService.update(user.tenantId, id, input as any, user);
   }
 
   @Mutation(() => Boolean)
@@ -71,7 +71,7 @@ export class LeadResolver {
     @GqlCurrentUser() user: RequestUser,
     @Args('id', { type: () => ID }) id: string,
   ) {
-    await this.leads.softDelete(user.tenantId, id, user);
+    await this.leadsService.softDelete(user.tenantId, id, user);
     return true;
   }
 
@@ -82,6 +82,6 @@ export class LeadResolver {
     @Args('id', { type: () => ID }) id: string,
     @Args('input') input: ConvertLeadInput,
   ) {
-    return this.leads.convert(user.tenantId, id, input, user);
+    return this.leadsService.convert(user.tenantId, id, input, user);
   }
 }

@@ -12,7 +12,7 @@ import type { RequestUser } from '../../common/types/request-context';
 @Resolver(() => Account)
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class AccountResolver {
-  constructor(private readonly accounts: AccountService) {}
+  constructor(private readonly accountsService: AccountService) {}
 
   @Query(() => PaginatedAccount)
   @RequirePermissions('account.read')
@@ -26,7 +26,7 @@ export class AccountResolver {
     @Args('skip', { type: () => Int, nullable: true }) skip?: number,
     @Args('take', { type: () => Int, nullable: true }) take?: number,
   ) {
-    const res = await this.accounts.list(user.tenantId, {
+    const res = await this.accountsService.list(user.tenantId, {
       search,
       type,
       industry,
@@ -44,7 +44,7 @@ export class AccountResolver {
     @GqlCurrentUser() user: RequestUser,
     @Args('id', { type: () => ID }) id: string,
   ) {
-    return this.accounts.get(user.tenantId, id, user);
+    return this.accountsService.get(user.tenantId, id, user);
   }
 
   @Mutation(() => Account)
@@ -53,7 +53,7 @@ export class AccountResolver {
     @GqlCurrentUser() user: RequestUser,
     @Args('input') input: CreateAccountInput,
   ) {
-    return this.accounts.create(user.tenantId, input as any, user);
+    return this.accountsService.create(user.tenantId, input as any, user);
   }
 
   @Mutation(() => Account)
@@ -63,7 +63,7 @@ export class AccountResolver {
     @Args('id', { type: () => ID }) id: string,
     @Args('input') input: UpdateAccountInput,
   ) {
-    return this.accounts.update(user.tenantId, id, input as any, user);
+    return this.accountsService.update(user.tenantId, id, input as any, user);
   }
 
   @Mutation(() => Boolean)
@@ -72,7 +72,7 @@ export class AccountResolver {
     @GqlCurrentUser() user: RequestUser,
     @Args('id', { type: () => ID }) id: string,
   ) {
-    await this.accounts.softDelete(user.tenantId, id, user);
+    await this.accountsService.softDelete(user.tenantId, id, user);
     return true;
   }
 }

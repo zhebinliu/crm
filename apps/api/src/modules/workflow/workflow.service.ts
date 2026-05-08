@@ -79,6 +79,12 @@ export class WorkflowService {
       },
     };
 
+    // Evaluate the rule's condition tree; an empty/missing tree is treated as
+    // "always run" to preserve historical behavior.
+    const conditionsMet = rule.conditions
+      ? evaluate(rule.conditions as ConditionNode, evalCtx)
+      : true;
+
     if (!conditionsMet) {
       await this.persistExecution(rule.id, ctx, WorkflowStatus.SKIPPED, false, [], undefined, startedAt);
       return;
@@ -137,6 +143,26 @@ export class WorkflowService {
     });
   }
 
+  /** Paginated variant for the GraphQL resolver (same WHERE shape as `list`). */
+  async listPaginated(
+    tenantId: string,
+    opts: { objectApiName?: string; skip?: number; take?: number } = {},
+  ) {
+    const { objectApiName, skip, take } = opts;
+    const where = { tenantId, ...(objectApiName ? { objectApiName } : {}) };
+    const [data, total] = await this.prisma.$transaction([
+      this.prisma.workflowRule.findMany({
+        where,
+        orderBy: [{ objectApiName: 'asc' }, { priority: 'asc' }],
+        include: { _count: { select: { executions: true } } },
+        ...(skip !== undefined ? { skip } : {}),
+        ...(take !== undefined ? { take } : {}),
+      }),
+      this.prisma.workflowRule.count({ where }),
+    ]);
+    return { data, total };
+  }
+
   get(tenantId: string, id: string) {
     return this.prisma.workflowRule.findFirstOrThrow({ where: { id, tenantId } });
   }
@@ -167,6 +193,19 @@ export class WorkflowService {
 
   async remove(tenantId: string, id: string) {
     await this.prisma.workflowRule.delete({ where: { id } });
+    return { ok: true };
+  }
+
+  /**
+   * Soft-delete by toggling `isActive` to false. WorkflowRule has no
+   * `deletedAt` column, so we deactivate instead — matches the
+   * "rule is no longer in effect" semantics callers expect.
+   */
+  async softDelete(tenantId: string, id: string) {
+    await this.prisma.workflowRule.update({
+      where: { id, tenantId },
+      data: { isActive: false },
+    });
     return { ok: true };
   }
 

@@ -6,13 +6,13 @@ import { User } from '../user/user.type';
 @ObjectType()
 export class Account {
   @Field(() => ID)
-  id: string;
+  id!: string;
 
   @Field()
-  tenantId: string;
+  tenantId!: string;
 
   @Field()
-  ownerId: string;
+  ownerId!: string;
 
   @Field(() => User, { nullable: true })
   owner?: User;
@@ -21,7 +21,7 @@ export class Account {
   parentId?: string;
 
   @Field()
-  name: string;
+  name!: string;
 
   @Field({ nullable: true })
   type?: string;
@@ -81,10 +81,10 @@ export class Account {
   customData?: any;
 
   @Field(() => GraphQLISODateTime)
-  createdAt: Date;
+  createdAt!: Date;
 
   @Field(() => GraphQLISODateTime)
-  updatedAt: Date;
+  updatedAt!: Date;
 }
 
 @ObjectType()

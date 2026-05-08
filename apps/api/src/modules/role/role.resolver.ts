@@ -12,18 +12,18 @@ import { RequirePermissions } from '../../common/decorators/require-permissions.
 @Resolver(() => Role)
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class RoleResolver {
-  constructor(private readonly roles: RoleService) {}
+  constructor(private readonly rolesService: RoleService) {}
 
   @Query(() => [Role])
   @RequirePermissions('admin.*')
   async roles(@GqlCurrentUser() authUser: any) {
-    return this.roles.list(authUser.tenantId);
+    return this.rolesService.list(authUser.tenantId);
   }
 
   @Query(() => [Permission])
   @RequirePermissions('admin.*')
   async permissions() {
-    return this.roles.listPermissions();
+    return this.rolesService.listPermissions();
   }
 
   @Mutation(() => Role)
@@ -32,7 +32,7 @@ export class RoleResolver {
     @GqlCurrentUser() authUser: any,
     @Args('input') input: CreateRoleInput,
   ) {
-    return this.roles.create(authUser.tenantId, input);
+    return this.rolesService.create(authUser.tenantId, input);
   }
 
   @Mutation(() => Role)
@@ -42,7 +42,7 @@ export class RoleResolver {
     @Args('id', { type: () => ID }) id: string,
     @Args('permissionCodes', { type: () => [String] }) permissionCodes: string[],
   ) {
-    return this.roles.updatePermissions(authUser.tenantId, id, permissionCodes);
+    return this.rolesService.updatePermissions(authUser.tenantId, id, permissionCodes);
   }
 
   @Mutation(() => Boolean)
@@ -51,7 +51,7 @@ export class RoleResolver {
     @GqlCurrentUser() authUser: any,
     @Args('id', { type: () => ID }) id: string,
   ) {
-    await this.roles.remove(authUser.tenantId, id);
+    await this.rolesService.remove(authUser.tenantId, id);
     return true;
   }
 }

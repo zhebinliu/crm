@@ -4,13 +4,13 @@ import GraphQLJSON from 'graphql-type-json';
 @InputType()
 export class CreateOpportunityInput {
   @Field()
-  accountId: string;
+  accountId!: string;
 
   @Field({ nullable: true })
   primaryContactId?: string;
 
   @Field()
-  name: string;
+  name!: string;
 
   @Field({ nullable: true })
   stage?: string;
@@ -28,7 +28,7 @@ export class CreateOpportunityInput {
   forecastCategory?: string;
 
   @Field()
-  closeDate: Date;
+  closeDate!: Date;
 
   @Field({ nullable: true })
   type?: string;

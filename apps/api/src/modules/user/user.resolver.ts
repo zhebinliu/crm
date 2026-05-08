@@ -11,7 +11,7 @@ import { RequirePermissions } from '../../common/decorators/require-permissions.
 @Resolver(() => User)
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class UserResolver {
-  constructor(private readonly users: UserService) {}
+  constructor(private readonly usersService: UserService) {}
 
   @Query(() => PaginatedUser)
   @RequirePermissions('user.read')
@@ -20,8 +20,8 @@ export class UserResolver {
     @Args('search', { type: () => String, nullable: true }) search?: string,
     @Args('isActive', { type: () => Boolean, nullable: true }) isActive?: boolean,
   ) {
-    const listInfo = await this.users.list(authUser.tenantId, { search, isActive });
-    return { data: listInfo.data, total: listInfo.total };
+    const data = await this.usersService.list(authUser.tenantId, { search, isActive });
+    return { data, total: data.length };
   }
 
   @Query(() => User)
@@ -30,7 +30,7 @@ export class UserResolver {
     @GqlCurrentUser() authUser: any,
     @Args('id', { type: () => ID }) id: string,
   ) {
-    return this.users.get(authUser.tenantId, id);
+    return this.usersService.get(authUser.tenantId, id);
   }
 
   @Mutation(() => User)
@@ -39,7 +39,7 @@ export class UserResolver {
     @GqlCurrentUser() authUser: any,
     @Args('input') input: CreateUserInput,
   ) {
-    return this.users.create(authUser.tenantId, input);
+    return this.usersService.create(authUser.tenantId, input);
   }
 
   @Mutation(() => User)
@@ -49,7 +49,7 @@ export class UserResolver {
     @Args('id', { type: () => ID }) id: string,
     @Args('input') input: UpdateUserInput,
   ) {
-    return this.users.update(authUser.tenantId, id, input);
+    return this.usersService.update(authUser.tenantId, id, input);
   }
 
   @Mutation(() => Boolean)
@@ -58,7 +58,7 @@ export class UserResolver {
     @GqlCurrentUser() authUser: any,
     @Args('id', { type: () => ID }) id: string,
   ) {
-    await this.users.softDelete(authUser.tenantId, id);
+    await this.usersService.softDelete(authUser.tenantId, id);
     return true;
   }
 }

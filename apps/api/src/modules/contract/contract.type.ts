@@ -5,10 +5,10 @@ import { Paginated } from '../../common/graphql/paginated.type';
 @ObjectType()
 export class Contract {
   @Field(() => ID)
-  id: string;
+  id!: string;
 
   @Field()
-  tenantId: string;
+  tenantId!: string;
 
   @Field({ nullable: true })
   ownerId?: string;
@@ -17,10 +17,10 @@ export class Contract {
   customData?: any;
 
   @Field(() => GraphQLISODateTime)
-  createdAt: Date;
+  createdAt!: Date;
 
   @Field(() => GraphQLISODateTime)
-  updatedAt: Date;
+  updatedAt!: Date;
 }
 
 @ObjectType()

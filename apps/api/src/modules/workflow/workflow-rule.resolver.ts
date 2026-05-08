@@ -21,7 +21,7 @@ export class WorkflowRuleResolver {
     @Args('skip', { type: () => Int, nullable: true }) skip?: number,
     @Args('take', { type: () => Int, nullable: true }) take?: number,
   ) {
-    const res = await this.workflowService.list(user.tenantId, { skip, take });
+    const res = await this.workflowService.listPaginated(user.tenantId, { skip, take });
     return { data: res.data, total: res.total };
   }
 
@@ -40,7 +40,7 @@ export class WorkflowRuleResolver {
     @GqlCurrentUser() user: RequestUser,
     @Args('input') input: CreateWorkflowRuleInput,
   ) {
-    return this.workflowService.create(user.tenantId, input as any, user);
+    return this.workflowService.create(user.tenantId, user.id, input as any);
   }
 
   @Mutation(() => WorkflowRule)
@@ -50,7 +50,7 @@ export class WorkflowRuleResolver {
     @Args('id', { type: () => ID }) id: string,
     @Args('input') input: UpdateWorkflowRuleInput,
   ) {
-    return this.workflowService.update(user.tenantId, id, input as any, user);
+    return this.workflowService.update(user.tenantId, id, user.id, input as any);
   }
 
   @Mutation(() => Boolean)

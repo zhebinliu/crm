@@ -59,6 +59,29 @@ export class ValidationRuleService {
     });
   }
 
+  /** Paginated variant for the GraphQL resolver. */
+  async listPaginated(
+    tenantId: string,
+    opts: { objectApiName?: string; skip?: number; take?: number } = {},
+  ) {
+    const { objectApiName, skip, take } = opts;
+    const where = { tenantId, ...(objectApiName ? { objectApiName } : {}) };
+    const [data, total] = await this.prisma.$transaction([
+      this.prisma.validationRule.findMany({
+        where,
+        orderBy: [{ objectApiName: 'asc' }, { priority: 'asc' }],
+        ...(skip !== undefined ? { skip } : {}),
+        ...(take !== undefined ? { take } : {}),
+      }),
+      this.prisma.validationRule.count({ where }),
+    ]);
+    return { data, total };
+  }
+
+  get(tenantId: string, id: string) {
+    return this.prisma.validationRule.findFirstOrThrow({ where: { id, tenantId } });
+  }
+
   create(tenantId: string, data: {
     name: string; description?: string; objectApiName: string;
     conditions: unknown; errorMessage: string; errorField?: string;
@@ -78,6 +101,18 @@ export class ValidationRuleService {
 
   async remove(tenantId: string, id: string) {
     await this.prisma.validationRule.delete({ where: { id } });
+    return { ok: true };
+  }
+
+  /**
+   * Soft-delete by toggling `isActive` to false. ValidationRule has no
+   * `deletedAt` column, so we deactivate instead.
+   */
+  async softDelete(tenantId: string, id: string) {
+    await this.prisma.validationRule.update({
+      where: { id, tenantId },
+      data: { isActive: false },
+    });
     return { ok: true };
   }
 }

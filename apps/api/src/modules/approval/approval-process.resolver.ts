@@ -18,11 +18,13 @@ export class ApprovalProcessResolver {
   @RequirePermissions('approvalProcess.read')
   async approvalProcesss(
     @GqlCurrentUser() user: RequestUser,
-    @Args('skip', { type: () => Int, nullable: true }) skip?: number,
-    @Args('take', { type: () => Int, nullable: true }) take?: number,
+    @Args('skip', { type: () => Int, nullable: true }) _skip?: number,
+    @Args('take', { type: () => Int, nullable: true }) _take?: number,
   ) {
-    const res = await this.approvalService.list(user.tenantId, { skip, take });
-    return { data: res.data, total: res.total };
+    // ApprovalProcess CRUD currently lives on `*Processes` methods. We reuse
+    // the existing list/get and shape the response for the GraphQL resolver.
+    const data = await this.approvalService.listProcesses(user.tenantId);
+    return { data, total: data.length };
   }
 
   @Query(() => ApprovalProcess)
@@ -31,7 +33,7 @@ export class ApprovalProcessResolver {
     @GqlCurrentUser() user: RequestUser,
     @Args('id', { type: () => ID }) id: string,
   ) {
-    return this.approvalService.get(user.tenantId, id);
+    return this.approvalService.getProcess(user.tenantId, id);
   }
 
   @Mutation(() => ApprovalProcess)
@@ -40,7 +42,7 @@ export class ApprovalProcessResolver {
     @GqlCurrentUser() user: RequestUser,
     @Args('input') input: CreateApprovalProcessInput,
   ) {
-    return this.approvalService.create(user.tenantId, input as any, user);
+    return this.approvalService.createProcess(user.tenantId, input as any);
   }
 
   @Mutation(() => ApprovalProcess)
@@ -50,7 +52,7 @@ export class ApprovalProcessResolver {
     @Args('id', { type: () => ID }) id: string,
     @Args('input') input: UpdateApprovalProcessInput,
   ) {
-    return this.approvalService.update(user.tenantId, id, input as any, user);
+    return this.approvalService.updateProcess(user.tenantId, id, input as any);
   }
 
   @Mutation(() => Boolean)
@@ -59,7 +61,7 @@ export class ApprovalProcessResolver {
     @GqlCurrentUser() user: RequestUser,
     @Args('id', { type: () => ID }) id: string,
   ) {
-    await this.approvalService.softDelete(user.tenantId, id);
+    await this.approvalService.deleteProcess(user.tenantId, id);
     return true;
   }
 }

@@ -3,13 +3,13 @@ import { InputType, Field, PartialType } from '@nestjs/graphql';
 @InputType()
 export class CreateUserInput {
   @Field()
-  email: string;
+  email!: string;
 
   @Field()
-  password: string;
+  password!: string;
 
   @Field()
-  displayName: string;
+  displayName!: string;
 
   @Field({ nullable: true })
   phone?: string;

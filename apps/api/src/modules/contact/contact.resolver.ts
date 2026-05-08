@@ -12,7 +12,7 @@ import type { RequestUser } from '../../common/types/request-context';
 @Resolver(() => Contact)
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class ContactResolver {
-  constructor(private readonly contacts: ContactService) {}
+  constructor(private readonly contactsService: ContactService) {}
 
   @Query(() => PaginatedContact)
   @RequirePermissions('contact.read')
@@ -24,7 +24,7 @@ export class ContactResolver {
     @Args('skip', { type: () => Int, nullable: true }) skip?: number,
     @Args('take', { type: () => Int, nullable: true }) take?: number,
   ) {
-    const res = await this.contacts.list(user.tenantId, {
+    const res = await this.contactsService.list(user.tenantId, {
       search,
       accountId,
       ownerId,
@@ -40,7 +40,7 @@ export class ContactResolver {
     @GqlCurrentUser() user: RequestUser,
     @Args('id', { type: () => ID }) id: string,
   ) {
-    return this.contacts.get(user.tenantId, id, user);
+    return this.contactsService.get(user.tenantId, id, user);
   }
 
   @Mutation(() => Contact)
@@ -49,7 +49,7 @@ export class ContactResolver {
     @GqlCurrentUser() user: RequestUser,
     @Args('input') input: CreateContactInput,
   ) {
-    return this.contacts.create(user.tenantId, input as any, user);
+    return this.contactsService.create(user.tenantId, input as any, user);
   }
 
   @Mutation(() => Contact)
@@ -59,7 +59,7 @@ export class ContactResolver {
     @Args('id', { type: () => ID }) id: string,
     @Args('input') input: UpdateContactInput,
   ) {
-    return this.contacts.update(user.tenantId, id, input as any, user);
+    return this.contactsService.update(user.tenantId, id, input as any, user);
   }
 
   @Mutation(() => Boolean)
@@ -68,7 +68,7 @@ export class ContactResolver {
     @GqlCurrentUser() user: RequestUser,
     @Args('id', { type: () => ID }) id: string,
   ) {
-    await this.contacts.softDelete(user.tenantId, id, user);
+    await this.contactsService.softDelete(user.tenantId, id, user);
     return true;
   }
 }

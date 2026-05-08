@@ -7,7 +7,7 @@ export class CreateLeadInput {
   firstName?: string;
 
   @Field()
-  lastName: string;
+  lastName!: string;
 
   @Field({ nullable: true })
   email?: string;

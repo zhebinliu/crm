@@ -10,7 +10,7 @@ export class CreateContactInput {
   firstName?: string;
 
   @Field()
-  lastName: string;
+  lastName!: string;
 
   @Field({ nullable: true })
   title?: string;

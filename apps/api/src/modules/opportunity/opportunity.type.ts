@@ -7,19 +7,19 @@ import { Account } from '../account/account.type';
 @ObjectType()
 export class Opportunity {
   @Field(() => ID)
-  id: string;
+  id!: string;
 
   @Field()
-  tenantId: string;
+  tenantId!: string;
 
   @Field()
-  ownerId: string;
+  ownerId!: string;
 
   @Field(() => User, { nullable: true })
   owner?: User;
 
   @Field()
-  accountId: string;
+  accountId!: string;
 
   @Field(() => Account, { nullable: true })
   account?: Account;
@@ -28,25 +28,25 @@ export class Opportunity {
   primaryContactId?: string;
 
   @Field()
-  name: string;
+  name!: string;
 
   @Field()
-  stage: string;
+  stage!: string;
 
   @Field(() => Float, { nullable: true })
   amount?: number;
 
   @Field()
-  currencyCode: string;
+  currencyCode!: string;
 
   @Field(() => Int)
-  probability: number;
+  probability!: number;
 
   @Field()
-  forecastCategory: string;
+  forecastCategory!: string;
 
   @Field(() => GraphQLISODateTime)
-  closeDate: Date;
+  closeDate!: Date;
 
   @Field({ nullable: true })
   type?: string;
@@ -64,19 +64,19 @@ export class Opportunity {
   lossReason?: string;
 
   @Field()
-  isClosed: boolean;
+  isClosed!: boolean;
 
   @Field()
-  isWon: boolean;
+  isWon!: boolean;
 
   @Field(() => GraphQLJSON, { nullable: true })
   customData?: any;
 
   @Field(() => GraphQLISODateTime)
-  createdAt: Date;
+  createdAt!: Date;
 
   @Field(() => GraphQLISODateTime)
-  updatedAt: Date;
+  updatedAt!: Date;
 }
 
 @ObjectType()

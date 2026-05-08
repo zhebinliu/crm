@@ -6,40 +6,40 @@ registerEnumType(FieldType, { name: 'FieldType' });
 @ObjectType()
 export class PicklistValue {
   @Field(() => ID)
-  id: string;
+  id!: string;
 
   @Field()
-  value: string;
+  value!: string;
 
   @Field()
-  label: string;
+  label!: string;
 
   @Field({ nullable: true })
   color?: string;
 
   @Field(() => Int)
-  displayOrder: number;
+  displayOrder!: number;
 
   @Field()
-  isActive: boolean;
+  isActive!: boolean;
 }
 
 @ObjectType()
 export class Picklist {
   @Field(() => ID)
-  id: string;
+  id!: string;
 
   @Field()
-  tenantId: string;
+  tenantId!: string;
 
   @Field()
-  apiName: string;
+  apiName!: string;
 
   @Field()
-  label: string;
+  label!: string;
 
   @Field()
-  isSystem: boolean;
+  isSystem!: boolean;
 
   @Field(() => [PicklistValue], { nullable: true })
   values?: PicklistValue[];
@@ -48,22 +48,22 @@ export class Picklist {
 @ObjectType()
 export class FieldDef {
   @Field(() => ID)
-  id: string;
+  id!: string;
 
   @Field()
-  apiName: string;
+  apiName!: string;
 
   @Field()
-  label: string;
+  label!: string;
 
   @Field(() => FieldType)
-  type: FieldType;
+  type!: FieldType;
 
   @Field()
-  required: boolean;
+  required!: boolean;
 
   @Field()
-  unique: boolean;
+  unique!: boolean;
 
   @Field({ nullable: true })
   helpText?: string;
@@ -81,37 +81,37 @@ export class FieldDef {
   scale?: number;
 
   @Field()
-  isSystem: boolean;
+  isSystem!: boolean;
 
   @Field()
-  isCustom: boolean;
+  isCustom!: boolean;
 
   @Field(() => Int)
-  displayOrder: number;
+  displayOrder!: number;
 }
 
 @ObjectType()
 export class ObjectDef {
   @Field(() => ID)
-  id: string;
+  id!: string;
 
   @Field()
-  apiName: string;
+  apiName!: string;
 
   @Field()
-  label: string;
+  label!: string;
 
   @Field()
-  labelPlural: string;
+  labelPlural!: string;
 
   @Field({ nullable: true })
   iconName?: string;
 
   @Field()
-  isSystem: boolean;
+  isSystem!: boolean;
 
   @Field()
-  isCustom: boolean;
+  isCustom!: boolean;
 
   @Field(() => [FieldDef], { nullable: true })
   fields?: FieldDef[];

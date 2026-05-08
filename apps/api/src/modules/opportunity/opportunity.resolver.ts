@@ -12,7 +12,7 @@ import type { RequestUser } from '../../common/types/request-context';
 @Resolver(() => Opportunity)
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class OpportunityResolver {
-  constructor(private readonly opportunities: OpportunityService) {}
+  constructor(private readonly opportunitiesService: OpportunityService) {}
 
   @Query(() => PaginatedOpportunity)
   @RequirePermissions('opportunity.read')
@@ -25,7 +25,7 @@ export class OpportunityResolver {
     @Args('skip', { type: () => Int, nullable: true }) skip?: number,
     @Args('take', { type: () => Int, nullable: true }) take?: number,
   ) {
-    const res = await this.opportunities.list(user.tenantId, {
+    const res = await this.opportunitiesService.list(user.tenantId, {
       search,
       accountId,
       ownerId,
@@ -42,7 +42,7 @@ export class OpportunityResolver {
     @GqlCurrentUser() user: RequestUser,
     @Args('id', { type: () => ID }) id: string,
   ) {
-    return this.opportunities.get(user.tenantId, id, user);
+    return this.opportunitiesService.get(user.tenantId, id, user);
   }
 
   @Mutation(() => Opportunity)
@@ -51,7 +51,7 @@ export class OpportunityResolver {
     @GqlCurrentUser() user: RequestUser,
     @Args('input') input: CreateOpportunityInput,
   ) {
-    return this.opportunities.create(user.tenantId, input as any, user);
+    return this.opportunitiesService.create(user.tenantId, input as any, user);
   }
 
   @Mutation(() => Opportunity)
@@ -61,7 +61,7 @@ export class OpportunityResolver {
     @Args('id', { type: () => ID }) id: string,
     @Args('input') input: UpdateOpportunityInput,
   ) {
-    return this.opportunities.update(user.tenantId, id, input as any, user);
+    return this.opportunitiesService.update(user.tenantId, id, input as any, user);
   }
 
   @Mutation(() => Boolean)
@@ -70,7 +70,7 @@ export class OpportunityResolver {
     @GqlCurrentUser() user: RequestUser,
     @Args('id', { type: () => ID }) id: string,
   ) {
-    await this.opportunities.softDelete(user.tenantId, id, user);
+    await this.opportunitiesService.softDelete(user.tenantId, id, user);
     return true;
   }
 }
