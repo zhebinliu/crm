@@ -414,6 +414,156 @@ export const webhookDlqApi = {
     api.post(`/admin/webhook-dlq/${id}/resolve`, { note }).then((r) => r.data),
 };
 
+// ── Reports + Dashboards (Wave 19a / 20a) ─────────────────────────────────
+
+export type ReportFormat = 'tabular' | 'summary' | 'matrix';
+export type ReportAggregateType = 'sum' | 'avg' | 'min' | 'max' | 'count';
+export type ReportFilterOp =
+  | 'eq' | 'neq' | 'in' | 'nin' | 'gt' | 'gte' | 'lt' | 'lte'
+  | 'contains' | 'startsWith' | 'endsWith' | 'isNull' | 'isNotNull';
+
+export interface ReportFilter {
+  field: string;
+  op: ReportFilterOp;
+  value?: unknown;
+}
+export interface ReportAggregate {
+  type: ReportAggregateType;
+  field?: string;
+  alias?: string;
+}
+export interface ReportSort { field: string; direction?: 'asc' | 'desc' }
+export interface ReportConfig {
+  columns: string[];
+  filters?: ReportFilter[];
+  groupBy?: string[];
+  aggregates?: ReportAggregate[];
+  sortBy?: ReportSort[];
+  limit?: number;
+}
+export interface RunReportResult {
+  columns: string[];
+  rows: Record<string, unknown>[];
+  grouped?: Array<{ key: Record<string, unknown>; aggregates: Record<string, number>; count: number }>;
+  totals?: Record<string, number>;
+}
+
+export interface ReportType {
+  id: string;
+  apiName: string;
+  label: string;
+  baseObject: string;
+  joins?: Array<{ object: string; foreignKey: string; alias: string }>;
+  availableColumns?: string[];
+  isStandard?: boolean;
+}
+
+export interface ReportDef {
+  id: string;
+  tenantId: string;
+  reportTypeId: string;
+  name: string;
+  description?: string | null;
+  format: ReportFormat;
+  config: ReportConfig;
+  ownerId: string;
+  isPublic: boolean;
+  folderName?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  reportType?: ReportType;
+}
+
+export type Visualization = 'table' | 'bar' | 'line' | 'pie' | 'metric' | 'donut';
+
+export interface DashboardComponent {
+  id: string;
+  dashboardId: string;
+  reportId: string;
+  visualization: Visualization;
+  title: string;
+  options?: Record<string, unknown>;
+  position?: { x?: number; y?: number; w?: number; h?: number };
+  createdAt: string;
+  report?: ReportDef;
+}
+
+export interface Dashboard {
+  id: string;
+  name: string;
+  description?: string | null;
+  ownerId: string;
+  isPublic: boolean;
+  layout?: Array<{ componentId: string; x: number; y: number; w: number; h: number }>;
+  components?: DashboardComponent[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const reportApi = {
+  listTypes: () => api.get<ReportType[]>('/report-types').then((r) => r.data),
+  list: () => api.get<ReportDef[]>('/reports').then((r) => r.data),
+  get: (id: string) => api.get<ReportDef>(`/reports/${id}`).then((r) => r.data),
+  create: (d: {
+    reportTypeId: string;
+    name: string;
+    description?: string;
+    format?: ReportFormat;
+    config: ReportConfig;
+    isPublic?: boolean;
+    folderName?: string;
+  }) => api.post<ReportDef>('/reports', d).then((r) => r.data),
+  update: (id: string, d: Partial<{
+    name: string;
+    description: string | null;
+    format: ReportFormat;
+    config: ReportConfig;
+    isPublic: boolean;
+    folderName: string | null;
+  }>) => api.put<ReportDef>(`/reports/${id}`, d).then((r) => r.data),
+  remove: (id: string) => api.delete(`/reports/${id}`).then((r) => r.data),
+  run: (id: string, runtimeFilters?: ReportFilter[]) =>
+    api.post<RunReportResult>(`/reports/${id}/run`, { runtimeFilters }).then((r) => r.data),
+  runAdHoc: (baseObject: string, config: ReportConfig) =>
+    api.post<RunReportResult>('/reports/run-adhoc', { baseObject, config }).then((r) => r.data),
+};
+
+export const dashboardApi = {
+  list: () => api.get<Dashboard[]>('/dashboards').then((r) => r.data),
+  get: (id: string) => api.get<Dashboard>(`/dashboards/${id}`).then((r) => r.data),
+  create: (d: {
+    name: string;
+    description?: string;
+    layout?: Array<{ componentId: string; x: number; y: number; w: number; h: number }>;
+    isPublic?: boolean;
+  }) => api.post<Dashboard>('/dashboards', d).then((r) => r.data),
+  update: (id: string, d: Partial<{
+    name: string;
+    description: string | null;
+    layout: Array<{ componentId: string; x: number; y: number; w: number; h: number }>;
+    isPublic: boolean;
+  }>) => api.put<Dashboard>(`/dashboards/${id}`, d).then((r) => r.data),
+  remove: (id: string) => api.delete(`/dashboards/${id}`).then((r) => r.data),
+  run: (id: string) =>
+    api
+      .get<{ dashboardId: string; components: Record<string, RunReportResult | { error: string }> }>(
+        `/dashboards/${id}/run`,
+      )
+      .then((r) => r.data),
+  addComponent: (
+    id: string,
+    d: {
+      reportId: string;
+      visualization?: Visualization;
+      title: string;
+      options?: Record<string, unknown>;
+      position?: { x: number; y: number; w: number; h: number };
+    },
+  ) => api.post<DashboardComponent>(`/dashboards/${id}/components`, d).then((r) => r.data),
+  removeComponent: (id: string, componentId: string) =>
+    api.delete(`/dashboards/${id}/components/${componentId}`).then((r) => r.data),
+};
+
 export const genericApi = {
   list: (objName: string, p?: Record<string, unknown>) => api.get(`/records/${objName}`, { params: p }).then(r => r.data),
   get: (objName: string, id: string) => api.get(`/records/${objName}/${id}`).then(r => r.data),
