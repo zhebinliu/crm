@@ -34,7 +34,7 @@ export class AccountResolver {
       parentId,
       skip,
       take,
-    });
+    } as any, user);
     return { data: res.data, total: res.total };
   }
 
@@ -44,7 +44,7 @@ export class AccountResolver {
     @GqlCurrentUser() user: RequestUser,
     @Args('id', { type: () => ID }) id: string,
   ) {
-    return this.accounts.get(user.tenantId, id);
+    return this.accounts.get(user.tenantId, id, user);
   }
 
   @Mutation(() => Account)
@@ -72,7 +72,7 @@ export class AccountResolver {
     @GqlCurrentUser() user: RequestUser,
     @Args('id', { type: () => ID }) id: string,
   ) {
-    await this.accounts.softDelete(user.tenantId, id);
+    await this.accounts.softDelete(user.tenantId, id, user);
     return true;
   }
 }

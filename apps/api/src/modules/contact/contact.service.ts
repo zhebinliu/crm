@@ -8,6 +8,7 @@ import { AuditService } from '../workflow/audit.service';
 import { OutboxService } from '../../common/outbox.service';
 import { IdentityResolutionService } from '../person/identity-resolution.service';
 import { EmbeddingService, contactContent } from '../embeddings/embedding.service';
+import { FlsService } from '../fls/fls.service';
 import type { RequestUser } from '../../common/types/request-context';
 import { RecycleBinService } from '../recycle-bin/recycle-bin.service';
 
@@ -29,6 +30,7 @@ export class ContactService extends BaseEntityService {
     outbox: OutboxService,
     recycleBin: RecycleBinService,
     private readonly identity: IdentityResolutionService,
+    private readonly fls: FlsService,
     embeddings: EmbeddingService,
   ) {
     super(workflow, validation, audit, emitter, outbox, recycleBin);
@@ -52,7 +54,7 @@ export class ContactService extends BaseEntityService {
     });
   }
 
-  async list(tenantId: string, opts: ContactListOptions = {}) {
+  async list(tenantId: string, opts: ContactListOptions = {}, user?: RequestUser) {
     const { accountId, search, skip = 0, take = 20 } = opts;
 
     const where = {
@@ -82,19 +84,25 @@ export class ContactService extends BaseEntityService {
       this.prisma.contact.count({ where }),
     ]);
 
+    // Wave 16a: strip FLS-gated fields from each row.
+    await this.fls.filterReadableMany(user, 'contact', data as unknown as Record<string, unknown>[]);
     return { data, total };
   }
 
-  async get(tenantId: string, id: string) {
+  async get(tenantId: string, id: string, user?: RequestUser) {
     const contact = await this.prisma.contact.findFirst({
       where: { id, tenantId, deletedAt: null },
       include: { account: { select: { id: true, name: true } } },
     });
     if (!contact) throw new NotFoundException(`Contact ${id} not found`);
+    // Wave 16a: strip FLS-gated fields. No-op if user not provided.
+    await this.fls.filterReadable(user, 'contact', contact as unknown as Record<string, unknown>);
     return contact;
   }
 
   async create(tenantId: string, input: Record<string, unknown>, user: RequestUser) {
+    // Wave 16a: reject writes to fields the user lacks writePermission for.
+    await this.fls.assertWritable(user, 'contact', input);
     await this.beforeSave(tenantId, 'contact', input, undefined, user);
     const data = {
       ...input,
@@ -126,6 +134,9 @@ export class ContactService extends BaseEntityService {
   }
 
   async update(tenantId: string, id: string, input: Record<string, unknown>, user: RequestUser) {
+    // Wave 16a: reject writes to fields the user lacks writePermission for.
+    await this.fls.assertWritable(user, 'contact', input);
+    // Internal previous-fetch — pass no user so we get the unfiltered record for diffing.
     const previous = await this.get(tenantId, id);
     await this.beforeSave(tenantId, 'contact', input, previous as Record<string, unknown>, user);
     const contact = await this.prisma.contact.update({

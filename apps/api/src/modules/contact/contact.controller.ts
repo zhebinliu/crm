@@ -119,14 +119,22 @@ export class ContactController {
 
   @Get()
   @RequirePermissions('contact.read')
-  list(@TenantId() tenantId: string, @Query() query: ListContactsQuery) {
-    return this.contactService.list(tenantId, query);
+  list(
+    @TenantId() tenantId: string,
+    @Query() query: ListContactsQuery,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.contactService.list(tenantId, query, user);
   }
 
   @Get(':id')
   @RequirePermissions('contact.read')
-  get(@TenantId() tenantId: string, @Param('id') id: string) {
-    return this.contactService.get(tenantId, id);
+  get(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.contactService.get(tenantId, id, user);
   }
 
   @Post()
@@ -153,7 +161,11 @@ export class ContactController {
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @RequirePermissions('contact.delete')
-  softDelete(@TenantId() tenantId: string, @Param('id') id: string) {
-    return this.contactService.softDelete(tenantId, id);
+  softDelete(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.contactService.softDelete(tenantId, id, user);
   }
 }
