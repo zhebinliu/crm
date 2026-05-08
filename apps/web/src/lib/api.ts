@@ -534,6 +534,7 @@ export const webhookDlqApi = {
     api.post(`/admin/webhook-dlq/${id}/resolve`, { note }).then((r) => r.data),
 };
 
+<<<<<<< HEAD
 // ── Reports + Dashboards (Wave 19a / 20a) ─────────────────────────────────
 
 export type ReportFormat = 'tabular' | 'summary' | 'matrix';
@@ -773,6 +774,71 @@ export const queuesApi = {
   items: (id: string): Promise<QueueItem[]> => api.get(`/queues/${id}/items`).then((r) => r.data),
   claim: (id: string, recordType: 'lead' | 'case', recordId: string) =>
     api.post(`/queues/${id}/claim`, { recordType, recordId }).then((r) => r.data),
+};
+
+// ── Territory Management (Wave 19f / 20f) ─────────────────────────────────
+
+export const territoryApi = {
+  list: () => api.get('/admin/territories').then((r) => r.data),
+  get: (id: string) => api.get(`/admin/territories/${id}`).then((r) => r.data),
+  create: (d: {
+    apiName: string;
+    label: string;
+    description?: string;
+    parentId?: string | null;
+    type?: string;
+    isActive?: boolean;
+  }) => api.post('/admin/territories', d).then((r) => r.data),
+  update: (
+    id: string,
+    d: {
+      label?: string;
+      description?: string | null;
+      parentId?: string | null;
+      type?: string;
+      isActive?: boolean;
+    },
+  ) => api.patch(`/admin/territories/${id}`, d).then((r) => r.data),
+  remove: (id: string) => api.delete(`/admin/territories/${id}`).then((r) => r.data),
+
+  assignUser: (id: string, body: { userId: string; roleInTerritory?: string; isPrimary?: boolean }) =>
+    api.post(`/admin/territories/${id}/users`, body).then((r) => r.data),
+  unassignUser: (id: string, userId: string) =>
+    api.delete(`/admin/territories/${id}/users/${userId}`).then((r) => r.data),
+
+  assignAccount: (id: string, accountId: string, body: { isPrimary?: boolean } = {}) =>
+    api.post(`/admin/territories/${id}/accounts/${accountId}`, body).then((r) => r.data),
+  unassignAccount: (id: string, accountId: string) =>
+    api.delete(`/admin/territories/${id}/accounts/${accountId}`).then((r) => r.data),
+
+  listRules: (id: string) => api.get(`/admin/territories/${id}/rules`).then((r) => r.data),
+  createRule: (
+    id: string,
+    d: {
+      name: string;
+      description?: string | null;
+      conditions: unknown;
+      matchType?: 'all' | 'any';
+      priority?: number;
+      isActive?: boolean;
+    },
+  ) => api.post(`/admin/territories/${id}/rules`, d).then((r) => r.data),
+  updateRule: (
+    id: string,
+    ruleId: string,
+    d: {
+      name?: string;
+      description?: string | null;
+      conditions?: unknown;
+      matchType?: 'all' | 'any';
+      priority?: number;
+      isActive?: boolean;
+    },
+  ) => api.patch(`/admin/territories/${id}/rules/${ruleId}`, d).then((r) => r.data),
+  deleteRule: (id: string, ruleId: string) =>
+    api.delete(`/admin/territories/${id}/rules/${ruleId}`).then((r) => r.data),
+
+  runAllRules: () => api.post('/admin/territories/run-rules').then((r) => r.data),
 };
 
 export const genericApi = {

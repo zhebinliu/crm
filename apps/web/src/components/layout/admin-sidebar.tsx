@@ -9,6 +9,7 @@ import {
   Globe, UsersRound, Inbox, Share2,
   ShieldCheck, KeyRound,
   Package,
+  MapPin,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth';
 import { useRouter } from 'next/navigation';
@@ -45,6 +46,7 @@ const ADMIN_NAV: NavItem[] = [
   { label: 'Customer 360', href: '/admin/persons', icon: <UserSearch size={18} /> },
   { label: '报表', href: '/admin/reports', icon: <BarChart3 size={18} /> },
   { label: 'Dashboard', href: '/admin/dashboards', icon: <PieChart size={18} /> },
+  { label: '领地管理', href: '/admin/territories', icon: <MapPin size={18} /> },
   { label: '回收站', href: '/admin/recycle-bin', icon: <Trash2 size={18} /> },
   { label: 'GDPR 数据主体', href: '/admin/gdpr', icon: <FileLock2 size={18} /> },
   { label: 'Webhook DLQ', href: '/admin/webhook-dlq', icon: <Webhook size={18} /> },
