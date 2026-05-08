@@ -7,7 +7,7 @@
 // queues, no escalation rules) but it's a real ticket model with comments,
 // owner, status, priority, and account/contact linkage.
 
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { CaseStatus, CasePriority } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { BaseEntityService } from '../../common/base-entity.service';
@@ -20,6 +20,8 @@ import type { RequestUser } from '../../common/types/request-context';
 import { RecycleBinService } from '../recycle-bin/recycle-bin.service';
 import { EmbeddingService, caseContent } from '../embeddings/embedding.service';
 import { FlsService } from '../fls/fls.service';
+import { RecordTypeService } from '../metadata/record-type.service';
+import { SlaService } from '../sla/sla.service';
 
 export interface CaseListOptions {
   search?: string;
@@ -45,9 +47,16 @@ export class CaseService extends BaseEntityService {
     recycleBin: RecycleBinService,
     embeddings: EmbeddingService,
     private readonly fls: FlsService,
+    private readonly recordTypes: RecordTypeService,
+    @Optional() private readonly sla?: SlaService,
   ) {
     super(workflow, validation, audit, emitter, outbox, recycleBin);
     this.embeddings = embeddings;
+  }
+
+  /** Public delegate so the controller can mark first-response explicitly. */
+  async markFirstResponse(tenantId: string, caseId: string): Promise<void> {
+    if (this.sla) await this.sla.markFirstResponse(tenantId, caseId);
   }
 
   /** Project a Case into the text we embed for RAG. */
@@ -112,6 +121,9 @@ export class CaseService extends BaseEntityService {
   }
 
   async create(tenantId: string, input: Record<string, unknown>, user: RequestUser) {
+    // Wave 19b: default Record Type before validation so RT-scoped picklists
+    // and validation rules see the correct subtype.
+    await this.recordTypes.applyDefaults(tenantId, 'case', input);
     // Wave 16a: reject writes to fields the user lacks writePermission for.
     await this.fls.assertWritable(user, 'case', input);
     await this.beforeSave(tenantId, 'case', input, undefined, user);
@@ -128,6 +140,12 @@ export class CaseService extends BaseEntityService {
 
     const created = await this.prisma.case.create({ data: data as never });
     await this.afterCreate(tenantId, 'case', created as Record<string, unknown>, user);
+    // Wave 19h: fire-and-forget SLA policy application.
+    if (this.sla) {
+      void this.sla.applyToCase(tenantId, created.id).catch(() => {
+        /* already logged inside SlaService */
+      });
+    }
     return created;
   }
 
@@ -156,6 +174,17 @@ export class CaseService extends BaseEntityService {
       data: { ...patch, updatedById: user.id },
     });
     await this.afterUpdate(tenantId, 'case', updated as Record<string, unknown>, previous as Record<string, unknown>, user);
+    // Wave 19h: SLA milestone progression on resolution + first-response.
+    if (this.sla) {
+      const wasResolved = previous.status === 'CLOSED_RESOLVED' || previous.status === 'CLOSED_NOT_RESOLVED';
+      const isResolved = updated.status === 'CLOSED_RESOLVED' || updated.status === 'CLOSED_NOT_RESOLVED';
+      if (!wasResolved && isResolved) {
+        void this.sla.markResolved(tenantId, id).catch(() => {});
+      }
+      if (previous.firstResponseAt == null && updated.firstResponseAt != null) {
+        void this.sla.markFirstResponse(tenantId, id).catch(() => {});
+      }
+    }
     return updated;
   }
 

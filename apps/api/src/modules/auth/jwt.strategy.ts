@@ -4,6 +4,7 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { RequestUser } from '../../common/types/request-context';
+import { PermissionResolverService } from '../permissions/permission-resolver.service';
 
 export interface JwtPayload {
   sub: string;       // user id
@@ -14,7 +15,11 @@ export interface JwtPayload {
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
-  constructor(config: ConfigService, private readonly prisma: PrismaService) {
+  constructor(
+    config: ConfigService,
+    private readonly prisma: PrismaService,
+    private readonly permResolver: PermissionResolverService,
+  ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
@@ -27,15 +32,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       where: { id: payload.sub, tenantId: payload.tid, isActive: true, deletedAt: null },
       include: {
         tenant: true,
-        roles: {
-          include: {
-            role: {
-              include: {
-                permissions: { include: { permission: true } },
-              },
-            },
-          },
-        },
+        roles: { include: { role: true } },
       },
     });
     if (!user) throw new UnauthorizedException({ code: 'UNAUTHORIZED', message: 'User not found' });
@@ -44,12 +41,9 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     }
 
     const roleCodes = user.roles.map((ur) => ur.role.code);
-    const perms = new Set<string>();
-    for (const ur of user.roles) {
-      for (const rp of ur.role.permissions) {
-        perms.add(rp.permission.code);
-      }
-    }
+    // Profile + PermSet layer (with soft fallback to legacy Role perms when
+    // the user has no Profile assigned yet). Cached for 60s in the resolver.
+    const resolved = await this.permResolver.resolveForUser(user.id);
 
     return {
       id: user.id,
@@ -57,7 +51,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       email: user.email,
       displayName: user.displayName,
       roles: roleCodes,
-      permissions: Array.from(perms),
+      permissions: resolved.flat,
       managerId: user.managerId,
     };
   }

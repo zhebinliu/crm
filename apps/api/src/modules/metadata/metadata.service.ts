@@ -1,8 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { FieldType } from '@prisma/client';
 import { FormulaService } from '../formula/formula.service';
 import { FlsService } from '../fls/fls.service';
+import { TranslationService } from '../i18n/translation.service';
 
 @Injectable()
 export class MetadataService {
@@ -10,6 +11,7 @@ export class MetadataService {
     private readonly prisma: PrismaService,
     private readonly formula: FormulaService,
     private readonly fls: FlsService,
+    @Optional() private readonly translations?: TranslationService,
   ) {}
 
   // ── Objects ───────────────────────────────────────────────────────────────
@@ -22,14 +24,28 @@ export class MetadataService {
     });
   }
 
-  async getObject(tenantId: string, apiName: string) {
+  async getObject(tenantId: string, apiName: string, locale?: string) {
     // Standard objects are stored lowercase; tolerate either case from callers.
+    // When `locale` is provided we eagerly include each field's picklist +
+    // values so TranslationService.applyToObject can translate them in one
+    // pass. Without `locale`, we keep the existing lean shape.
     const obj = await this.prisma.objectDef.findFirst({
       where: {
         tenantId,
         OR: [{ apiName }, { apiName: apiName.toLowerCase() }],
       },
-      include: { fields: { orderBy: { displayOrder: 'asc' } } },
+      include: locale
+        ? {
+            fields: {
+              orderBy: { displayOrder: 'asc' },
+              include: {
+                picklist: {
+                  include: { values: { where: { isActive: true }, orderBy: { displayOrder: 'asc' } } },
+                },
+              },
+            },
+          }
+        : { fields: { orderBy: { displayOrder: 'asc' } } },
     });
     if (!obj) throw new NotFoundException({ code: 'NOT_FOUND', message: `Object ${apiName} not found` });
 
@@ -59,7 +75,14 @@ export class MetadataService {
       lookupFieldApiName: cf.apiName,
     }));
 
-    return { ...obj, childRelationships };
+    const result = { ...obj, childRelationships } as Record<string, unknown>;
+
+    // Wave 19g — apply tenant locale overrides if requested.
+    if (locale && this.translations) {
+      await this.translations.applyToObject(tenantId, result, locale);
+    }
+
+    return result;
   }
 
   createObject(tenantId: string, data: {

@@ -10,10 +10,12 @@ import { MfaController } from './mfa.controller';
 import { ApiKeyService } from './api-key.service';
 import { ApiKeyController } from './api-key.controller';
 import { CryptoModule } from '../../common/crypto.service';
+import { PermissionsModule } from '../permissions/permissions.module';
 
 @Module({
   imports: [
     CryptoModule,
+    PermissionsModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],

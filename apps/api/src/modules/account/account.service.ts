@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 import { BaseEntityService } from '../../common/base-entity.service';
@@ -10,6 +10,7 @@ import { EmbeddingService, accountContent } from '../embeddings/embedding.servic
 import { FlsService } from '../fls/fls.service';
 import type { RequestUser } from '../../common/types/request-context';
 import { RecycleBinService } from '../recycle-bin/recycle-bin.service';
+import { AssignmentEngineService } from '../territory/assignment-engine.service';
 
 export interface AccountListOptions {
   search?: string;
@@ -21,6 +22,8 @@ export interface AccountListOptions {
 
 @Injectable()
 export class AccountService extends BaseEntityService {
+  private readonly accLog = new Logger(AccountService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     workflow: WorkflowService,
@@ -31,9 +34,24 @@ export class AccountService extends BaseEntityService {
     recycleBin: RecycleBinService,
     private readonly fls: FlsService,
     embeddings: EmbeddingService,
+    // Wave 19f: optional so existing tests / mocks don't have to provide it.
+    @Optional() private readonly assignmentEngine?: AssignmentEngineService,
   ) {
     super(workflow, validation, audit, emitter, outbox, recycleBin);
     this.embeddings = embeddings;
+  }
+
+  /**
+   * Fire-and-forget territory rule re-evaluation. Failure logs a warning;
+   * Account writes never fail because of territory bookkeeping.
+   */
+  private runTerritoryAssignment(tenantId: string, account: Record<string, unknown>): void {
+    if (!this.assignmentEngine) return;
+    void this.assignmentEngine
+      .applyOnAccountWrite(tenantId, account)
+      .catch((e) => this.accLog.warn(
+        `Territory assignment failed for account=${account['id']}: ${e instanceof Error ? e.message : e}`,
+      ));
   }
 
   /** Project an Account into the text we embed for RAG. */
@@ -116,6 +134,7 @@ export class AccountService extends BaseEntityService {
     };
     const account = await this.prisma.account.create({ data: data as any });
     await this.afterCreate(tenantId, 'account', account as Record<string, unknown>, user);
+    this.runTerritoryAssignment(tenantId, account as Record<string, unknown>);
     return account;
   }
 
@@ -130,6 +149,7 @@ export class AccountService extends BaseEntityService {
       data: { ...input, updatedAt: new Date() } as any,
     });
     await this.afterUpdate(tenantId, 'account', account as Record<string, unknown>, previous as Record<string, unknown>, user);
+    this.runTerritoryAssignment(tenantId, account as Record<string, unknown>);
     return account;
   }
 

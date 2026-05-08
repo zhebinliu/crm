@@ -2,6 +2,7 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { evaluate, type ConditionNode } from '@tokenwave/rule-engine';
 import type { EvalContext } from '@tokenwave/rule-engine';
+import { RecordTypeService } from '../metadata/record-type.service';
 
 export interface ValidationError {
   field?: string;
@@ -10,7 +11,10 @@ export interface ValidationError {
 
 @Injectable()
 export class ValidationRuleService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly recordTypes: RecordTypeService,
+  ) {}
 
   /**
    * Run all active validation rules for an object. When a rule's condition
@@ -42,6 +46,34 @@ export class ValidationRuleService {
       const fires = evaluate(rule.conditions as ConditionNode, ctx);
       if (fires) {
         errors.push({ field: rule.errorField ?? undefined, message: rule.errorMessage });
+      }
+    }
+
+    // Wave 19b: Record-Type-aware picklist validation. When the record has
+    // a recordTypeId and that RT defines picklistOverrides, every overridden
+    // field's value on the incoming record must come from the override
+    // picklist's active values.
+    const rtId = record['recordTypeId'] as string | undefined;
+    if (rtId) {
+      const rt = await this.prisma.recordType.findFirst({
+        where: { id: rtId, tenantId },
+        select: { picklistOverrides: true },
+      });
+      const overrides = (rt?.picklistOverrides as Record<string, string> | null) ?? {};
+      for (const fieldApiName of Object.keys(overrides)) {
+        if (!(fieldApiName in record)) continue;
+        const ok = await this.recordTypes.validatePicklistValue(
+          tenantId,
+          rtId,
+          fieldApiName,
+          record[fieldApiName],
+        );
+        if (!ok) {
+          errors.push({
+            field: fieldApiName,
+            message: `Value not allowed by record type for "${fieldApiName}"`,
+          });
+        }
       }
     }
 

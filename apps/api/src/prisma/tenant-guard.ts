@@ -44,6 +44,8 @@ const TENANT_FREE_MODELS = new Set<string>([
   'ApprovalRequest', // FK to ApprovalProcess
   'ApprovalAction',  // FK to ApprovalRequest
   'ForecastUpdateEntry', // FK to ForecastUpdateTask
+  'UserProfile',         // FK to User (tenant scope inherited)
+  'UserPermissionSet',   // FK to User (tenant scope inherited)
 ]);
 
 /** Actions we want to police. */

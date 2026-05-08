@@ -68,6 +68,29 @@ model Tenant {
   recordEmbeddings    RecordEmbedding[]
   fieldHistory        FieldHistory[]
   apiKeys             ApiKey[]
+  reportTypes         ReportType[]
+  reports             ReportDef[]
+  dashboards          Dashboard[]
+  dashboardComponents DashboardComponent[]
+  productBundles      ProductBundle[]
+  priceTiers          PriceTier[]
+  territories                Territory[]
+  userTerritories            UserTerritory[]
+  accountTerritories         AccountTerritory[]
+  territoryAssignmentRules   TerritoryAssignmentRule[]
+  recordTypes         RecordType[]
+  pageLayouts         PageLayout[]
+  orgWideDefaults     OrgWideDefault[]
+  publicGroups        PublicGroup[]
+  queues              Queue[]
+  profiles            Profile[]
+  permissionSets      PermissionSet[]
+  currencyRates       CurrencyRate[]
+  labelTranslations   LabelTranslation[]
+  knowledgeArticles   KnowledgeArticle[]
+  slaPolicies         SlaPolicy[]
+  entitlements        Entitlement[]
+  slaMilestones       SlaMilestone[]
 
   @@map("tenants")
 }
@@ -144,25 +167,25 @@ model ApiKey {
 // Dimension: 1536 (OpenAI text-embedding-3-small / ada-002 default).
 
 model RecordEmbedding {
-  id          String   @id @default(cuid())
-  tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  recordType  String // "lead" | "contact" | "account" | "opportunity" | "case" | "activity"
-  recordId    String
+  id         String @id @default(cuid())
+  tenantId   String
+  tenant     Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  recordType String // "lead" | "contact" | "account" | "opportunity" | "case" | "activity"
+  recordId   String
 
   // Vector embedding. Stored as Float[] (pgvector fallback).
-  embedding   Float[]
+  embedding Float[]
 
   // Hash of the input text — used to skip re-embedding when content hasn't
   // changed (saves OpenAI tokens on every record save).
   contentHash String
-  content     String   @db.Text
+  content     String @db.Text
 
-  model       String   @default("text-embedding-3-small")
-  dimension   Int      @default(1536)
+  model     String @default("text-embedding-3-small")
+  dimension Int    @default(1536)
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([tenantId, recordType, recordId])
   @@index([tenantId, recordType])
@@ -212,10 +235,13 @@ model User {
   forecastUpdateEntries ForecastUpdateEntry[] @relation("ForecastEntryUser")
   notifications         Notification[]
   listViews             ListView[]
-  recordShares          RecordShare[]      @relation("RecordShareUser")
-  ownedCases            Case[]             @relation("CaseOwner")
-  ownedCampaigns        Campaign[]         @relation("CampaignOwner")
+  recordShares          RecordShare[]         @relation("RecordShareUser")
+  ownedCases            Case[]                @relation("CaseOwner")
+  ownedCampaigns        Campaign[]            @relation("CampaignOwner")
+  userTerritories       UserTerritory[]       @relation("UserTerritoryRel")
   mfa                   UserMfaSecret?
+  userProfile           UserProfile?       @relation("UserProfileRel")
+  userPermissionSets    UserPermissionSet[] @relation("UserPermissionSetRel")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -290,17 +316,20 @@ model RecordShare {
   tenant       Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   recordType   String           // "lead" | "account" | "opportunity" | ...
   recordId     String
-  // User this row grants access to
-  userId       String
-  user         User             @relation("RecordShareUser", fields: [userId], references: [id], onDelete: Cascade)
+  // Grantee — at-least-one of userId / groupId must be set (enforced at service layer).
+  userId       String?
+  user         User?            @relation("RecordShareUser", fields: [userId], references: [id], onDelete: Cascade)
+  groupId      String?
+  group        PublicGroup?     @relation("GroupShare", fields: [groupId], references: [id], onDelete: Cascade)
   accessLevel  ShareAccessLevel @default(READ)
   // "manual" | "rule:<ruleId>" | "team" — provenance of this share
-  reason       String           @default("manual")
-  createdAt    DateTime         @default(now())
-  createdById  String?
+  reason      String           @default("manual")
+  createdAt   DateTime         @default(now())
+  createdById String?
 
-  @@unique([tenantId, recordType, recordId, userId])
+  @@unique([tenantId, recordType, recordId, userId, groupId])
   @@index([tenantId, userId, recordType])
+  @@index([tenantId, groupId, recordType])
   @@index([tenantId, recordType, recordId])
   @@map("record_shares")
 }
@@ -337,6 +366,81 @@ model UserRole {
 
   @@id([userId, roleId])
   @@map("user_roles")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// PROFILE + PERMISSION SET (Wave 19d) — Salesforce-style two-layer model
+// ─────────────────────────────────────────────────────────────────────────
+// Profile  = mandatory baseline. Each User has exactly one Profile.
+// PermSet  = additive overlays. Zero-or-many. Boolean-OR'd onto profile.
+// The legacy Role model still exists for record-level sharing hierarchy.
+
+model Profile {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  apiName     String
+  label       String
+  description String?
+  isSystem    Boolean  @default(false)
+  // Object-level CRUD: { lead: {read,write,delete}, opportunity: {...} }
+  objectCrud  Json     @default("{}")
+  // Field-level: { "lead.amount": {read,write}, ... }
+  fieldPerms  Json     @default("{}")
+  // System perms: ["api_enabled","modify_all_data","view_all_data", ...]
+  systemPerms String[] @default([])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  users       UserProfile[]
+
+  @@unique([tenantId, apiName])
+  @@map("profiles")
+}
+
+model UserProfile {
+  userId     String   @id
+  user       User     @relation("UserProfileRel", fields: [userId], references: [id], onDelete: Cascade)
+  profileId  String
+  profile    Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  assignedAt DateTime @default(now())
+
+  @@index([profileId])
+  @@map("user_profiles")
+}
+
+model PermissionSet {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  apiName     String
+  label       String
+  description String?
+  isActive    Boolean  @default(true)
+  // Same shape as Profile but ADDITIVE — adds permissions on top of base.
+  objectCrud  Json     @default("{}")
+  fieldPerms  Json     @default("{}")
+  systemPerms String[] @default([])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  assignments UserPermissionSet[]
+
+  @@unique([tenantId, apiName])
+  @@map("permission_sets")
+}
+
+model UserPermissionSet {
+  id              String        @id @default(cuid())
+  userId          String
+  user            User          @relation("UserPermissionSetRel", fields: [userId], references: [id], onDelete: Cascade)
+  permissionSetId String
+  permissionSet   PermissionSet @relation(fields: [permissionSetId], references: [id], onDelete: Cascade)
+  assignedById    String?
+  expiresAt       DateTime?
+  assignedAt      DateTime      @default(now())
+
+  @@unique([userId, permissionSetId])
+  @@index([userId])
+  @@map("user_permission_sets")
 }
 
 model Session {
@@ -481,6 +585,64 @@ model PicklistValue {
   @@map("picklist_values")
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// RECORD TYPES & PAGE LAYOUTS (Wave 19b)
+// ─────────────────────────────────────────────────────────────────────────
+// Record Types: per-object subtypes with their own picklists / layouts /
+// validation. e.g. Opportunity has record types "国内" and "海外", each
+// with different stage picklists.
+
+model RecordType {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  objectApiName String   // "opportunity"
+  apiName      String   // "domestic"
+  label        String
+  description  String?
+  isDefault    Boolean  @default(false)  // exactly one per (tenant,objectApiName) should be default
+  isActive     Boolean  @default(true)
+  // optional override of which Picklist drives a particular FIELD on this RT
+  // shape: { "stage": "<picklistId>", "leadSource": "<picklistId>" }
+  picklistOverrides Json @default("{}")
+  // page-layout reference; null falls back to ObjectDef's default layout
+  layoutId     String?
+  layout       PageLayout? @relation(fields: [layoutId], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  @@unique([tenantId, objectApiName, apiName])
+  @@index([tenantId, objectApiName])
+  @@map("record_types")
+}
+
+// Real Page Layout — structured, renderable. Keep ObjectDef.layoutJson for
+// backward compat; new world uses this richer model.
+model PageLayout {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  objectApiName String
+  apiName      String
+  label        String
+  // structured layout: array of sections, each with rows of fields/related-lists
+  // [
+  //   { type: "section", title: "信息", columns: 2, rows: [
+  //       { fields: [{apiName:"name", required:true},{apiName:"amount"}] },
+  //       { fields: [{apiName:"stage"},{apiName:"closeDate"}] } ]},
+  //   { type: "related-list", childObjectApiName: "activity", filterApiName: "owner",
+  //     columns: ["subject","dueDate","status","ownerId"], limit: 25 },
+  //   { type: "richtext", html: "..." }
+  // ]
+  sections     Json     @default("[]")
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  recordTypes  RecordType[]
+  @@unique([tenantId, objectApiName, apiName])
+  @@index([tenantId, objectApiName])
+  @@map("page_layouts")
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 // LTC CORE — Lead to Cash
 // ════════════════════════════════════════════════════════════════════════════
@@ -491,6 +653,12 @@ model Lead {
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   ownerId  String
   owner    User   @relation("LeadOwner", fields: [ownerId], references: [id])
+  // SF-style polymorphic owner: when a queue holds the record, queueId is set.
+  // Service code interprets ownership as `queueId ?? ownerId`. ownerId stays
+  // non-null in v1 for type safety (defaulting to a system "queue placeholder"
+  // user is acceptable; future: drop NOT NULL and use a true polymorphic FK).
+  queueId  String?
+  queue    Queue?  @relation("LeadQueue", fields: [queueId], references: [id], onDelete: SetNull)
 
   // Customer 360: link to the canonical Person identity (set on create/update
   // by IdentityResolutionService). Optional because IdentityRule may surface
@@ -527,6 +695,10 @@ model Lead {
   description  String? @db.Text
   customFields Json    @default("{}")
 
+  // Wave 19b: Record Type — picks which subtype layout/picklists apply.
+  // Nullable; defaulted on create by RecordTypeService.applyDefaults.
+  recordTypeId String?
+
   // conversion
   isConverted        Boolean   @default(false)
   convertedAt        DateTime?
@@ -534,7 +706,7 @@ model Lead {
   convertedContactId String?
   convertedOppId     String?
 
-  campaignMembers    CampaignMember[]
+  campaignMembers CampaignMember[]
 
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -547,6 +719,7 @@ model Lead {
   @@index([tenantId, email])
   @@index([tenantId, isConverted])
   @@index([tenantId, personId])
+  @@index([tenantId, recordTypeId])
   @@map("leads")
 }
 
@@ -589,6 +762,8 @@ model Account {
   orders        Order[]
   contracts     Contract[]
   cases         Case[]
+  territories   AccountTerritory[]
+  entitlements  Entitlement[]
 
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -637,6 +812,7 @@ model Contact {
 
   cases             Case[]
   campaignMembers   CampaignMember[]
+  entitlements      Entitlement[]
 
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -664,6 +840,8 @@ model Opportunity {
   stage            String   @default("prospecting") // picklist
   amount           Decimal? @db.Decimal(18, 2)
   currencyCode     String   @default("CNY")
+  // Auto-computed in tenant corporate currency (Wave 19g). Null when no rate.
+  convertedAmount  Decimal? @db.Decimal(18, 2)
   probability      Int      @default(10) // 0-100
   forecastCategory String   @default("pipeline") // pipeline/best_case/commit/closed
   closeDate        DateTime
@@ -676,6 +854,9 @@ model Opportunity {
   isClosed     Boolean @default(false)
   isWon        Boolean @default(false)
   customFields Json    @default("{}")
+
+  // Wave 19b: Record Type — picks which subtype layout/picklists apply.
+  recordTypeId String?
 
   lineItems OpportunityLineItem[]
   quotes    Quote[]
@@ -691,6 +872,7 @@ model Opportunity {
   @@index([tenantId, ownerId])
   @@index([tenantId, accountId])
   @@index([tenantId, closeDate])
+  @@index([tenantId, recordTypeId])
   @@map("opportunities")
 }
 
@@ -788,6 +970,9 @@ model Product {
   oppLineItems   OpportunityLineItem[]
   quoteLineItems QuoteLineItem[]
   orderLineItems OrderLineItem[]
+  bundle         ProductBundle?
+  bundleItems    BundleItem[]    @relation("BundleChild")
+  priceTiers     PriceTier[]     @relation("ProductTiers")
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -864,6 +1049,8 @@ model Quote {
   name         String
   status       String    @default("draft") // draft/in_review/approved/presented/accepted/rejected/expired
   currencyCode String    @default("CNY")
+  // Auto-computed in tenant corporate currency (Wave 19g). Null when no rate.
+  convertedAmount Decimal? @db.Decimal(18, 2)
   expiresAt    DateTime?
 
   subtotal       Decimal @default(0) @db.Decimal(18, 2)
@@ -942,6 +1129,8 @@ model Order {
   endDate       DateTime?
   poNumber      String? // customer PO
   currencyCode  String    @default("CNY")
+  // Auto-computed in tenant corporate currency (Wave 19g). Null when no rate.
+  convertedAmount Decimal? @db.Decimal(18, 2)
 
   subtotal       Decimal @default(0) @db.Decimal(18, 2)
   discountAmount Decimal @default(0) @db.Decimal(18, 2)
@@ -1116,15 +1305,15 @@ model Attachment {
   createdAt   DateTime @default(now())
 
   // ─── Production storage fields (Wave 18c) ────────────────────────────────
-  storageBackend   String   @default("s3")     // "s3" | "local"
-  storageKey       String?                     // object key in bucket / disk path
-  sizeBytes        Int?                        // canonical size in bytes (mirror of `size` long-term)
-  checksum         String?                     // SHA-256 hex
-  uploadedById     String?                     // user who triggered presign
-  uploadedAt       DateTime?                   // set on confirm
-  virusScanStatus  String?  @default("pending") // pending | clean | infected | skipped
-  status           String?  @default("pending") // pending | uploaded | confirmed | deleted
-  deletedAt        DateTime?
+  storageBackend  String    @default("s3") // "s3" | "local"
+  storageKey      String? // object key in bucket / disk path
+  sizeBytes       Int? // canonical size in bytes (mirror of `size` long-term)
+  checksum        String? // SHA-256 hex
+  uploadedById    String? // user who triggered presign
+  uploadedAt      DateTime? // set on confirm
+  virusScanStatus String?   @default("pending") // pending | clean | infected | skipped
+  status          String?   @default("pending") // pending | uploaded | confirmed | deleted
+  deletedAt       DateTime?
 
   @@index([tenantId, targetType, targetId])
   @@index([tenantId, status])
@@ -1155,30 +1344,38 @@ enum CasePriority {
 }
 
 model Case {
-  id           String       @id @default(cuid())
-  tenantId     String
-  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  caseNumber   String       // human-readable (e.g. "CASE-0042")
-  subject      String
-  description  String?      @db.Text
-  status       CaseStatus   @default(NEW)
-  priority     CasePriority @default(NORMAL)
+  id              String       @id @default(cuid())
+  tenantId        String
+  tenant          Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  caseNumber      String // human-readable (e.g. "CASE-0042")
+  subject         String
+  description     String?      @db.Text
+  status          CaseStatus   @default(NEW)
+  priority        CasePriority @default(NORMAL)
   // origin: "email" | "phone" | "web" | "portal" | "api" | "chat"
-  source       String       @default("web")
+  source          String       @default("web")
   // SLA fields (could be enriched from a future SLA policy table).
-  slaTargetAt  DateTime?
+  slaTargetAt     DateTime?
   firstResponseAt DateTime?
-  resolvedAt   DateTime?
+  resolvedAt      DateTime?
 
   ownerId      String
   owner        User         @relation("CaseOwner", fields: [ownerId], references: [id])
+  // SF-style polymorphic owner — see Lead.queueId. When queueId is set, the
+  // record is "in the queue"; service code treats `queueId ?? ownerId` as
+  // the effective owner for visibility/routing purposes.
+  queueId      String?
+  queue        Queue?       @relation("CaseQueue", fields: [queueId], references: [id], onDelete: SetNull)
   // Polymorphic-ish relations to standard CRM objects
-  accountId    String?
-  account      Account?     @relation(fields: [accountId], references: [id], onDelete: SetNull)
-  contactId    String?
-  contact      Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  accountId String?
+  account   Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  contactId String?
+  contact   Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
 
-  customFields Json         @default("{}")
+  customFields Json @default("{}")
+
+  // Wave 19b: Record Type — picks which subtype layout/picklists apply.
+  recordTypeId String?
 
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
@@ -1186,30 +1383,163 @@ model Case {
   updatedById  String?
   deletedAt    DateTime?
 
-  comments     CaseComment[]
+  comments      CaseComment[]
+  articleLinks  CaseArticleLink[]
+  slaMilestones SlaMilestone[]
 
   @@unique([tenantId, caseNumber])
   @@index([tenantId, status])
   @@index([tenantId, ownerId])
   @@index([tenantId, accountId])
   @@index([tenantId, priority, status])
+  @@index([tenantId, recordTypeId])
   @@map("cases")
 }
 
 model CaseComment {
-  id         String   @id @default(cuid())
-  tenantId   String
-  caseId     String
-  case       Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  authorId   String
-  body       String   @db.Text
+  id        String   @id @default(cuid())
+  tenantId  String
+  caseId    String
+  case      Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  authorId  String
+  body      String   @db.Text
   // Internal notes are visible to staff only; public comments may surface
   // to the customer portal.
-  isPublic   Boolean  @default(false)
-  createdAt  DateTime @default(now())
+  isPublic  Boolean  @default(false)
+  createdAt DateTime @default(now())
 
   @@index([tenantId, caseId])
   @@map("case_comments")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// KNOWLEDGE BASE (Wave 19h)
+// ─────────────────────────────────────────────────────────────────────────
+// Knowledge articles with versioning, status (draft/published/archived),
+// and engagement metrics. Used for case deflection via semantic search.
+
+model KnowledgeArticle {
+  id              String   @id @default(cuid())
+  tenantId        String
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  articleNumber   String   // "KB-0042"
+  title           String
+  // Markdown body
+  content         String   @db.Text
+  summary         String?  @db.Text
+  // "draft" | "published" | "archived"
+  status          String   @default("draft")
+  category        String?
+  tags            String[] @default([])
+  ownerId         String
+  // Versioning: bump on every meaningful edit
+  version         Int      @default(1)
+  publishedAt     DateTime?
+  archivedAt      DateTime?
+  // Engagement metrics
+  viewCount       Int      @default(0)
+  helpfulCount    Int      @default(0)
+  notHelpfulCount Int      @default(0)
+  caseLinks       CaseArticleLink[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  deletedAt       DateTime?
+
+  @@unique([tenantId, articleNumber])
+  @@index([tenantId, status, category])
+  @@index([tenantId, ownerId])
+  @@map("knowledge_articles")
+}
+
+model CaseArticleLink {
+  id        String           @id @default(cuid())
+  tenantId  String
+  caseId    String
+  case      Case             @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  articleId String
+  article   KnowledgeArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  // "suggested_by_ai" | "linked_by_agent" | "marked_helpful"
+  source    String           @default("linked_by_agent")
+  createdAt DateTime         @default(now())
+
+  @@unique([caseId, articleId])
+  @@index([articleId])
+  @@map("case_article_links")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// SLA POLICY / ENTITLEMENT / MILESTONE (Wave 19h)
+// ─────────────────────────────────────────────────────────────────────────
+
+model SlaPolicy {
+  id                         String   @id @default(cuid())
+  tenantId                   String
+  tenant                     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  apiName                    String
+  label                      String
+  description                String?
+  // Predicate to match cases: { priority: "HIGH" } or { OR: [...] }
+  caseFilter                 Json     @default("{}")
+  // Business hours: { mon: [9,18], tue: [9,18], ... } in 24h, tenant tz
+  businessHours              Json     @default("{}")
+  holidays                   String[] @default([])
+  firstResponseTargetMinutes Int      @default(60)
+  resolutionTargetMinutes    Int      @default(1440)
+  isActive                   Boolean  @default(true)
+  priority                   Int      @default(100)
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+  entitlements               Entitlement[]
+  milestones                 SlaMilestone[]
+
+  @@unique([tenantId, apiName])
+  @@index([tenantId, isActive, priority])
+  @@map("sla_policies")
+}
+
+model Entitlement {
+  id          String    @id @default(cuid())
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  accountId   String?
+  account     Account?  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  contactId   String?
+  contact     Contact?  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  slaPolicyId String
+  slaPolicy   SlaPolicy @relation(fields: [slaPolicyId], references: [id], onDelete: Cascade)
+  startsAt    DateTime
+  endsAt      DateTime
+  status      String    @default("active") // active | expired | cancelled
+  tier        String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([tenantId, accountId, status])
+  @@index([tenantId, contactId, status])
+  @@map("entitlements")
+}
+
+model SlaMilestone {
+  id          String    @id @default(cuid())
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  policyId    String?
+  policy      SlaPolicy? @relation(fields: [policyId], references: [id], onDelete: SetNull)
+  caseId      String
+  case        Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  // "first_response" | "resolution" | custom
+  type        String
+  targetAt    DateTime
+  completedAt DateTime?
+  // "pending" | "completed" | "breached" | "stopped"
+  status      String    @default("pending")
+  breachedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([tenantId, caseId])
+  @@index([tenantId, status, targetAt])
+  @@map("sla_milestones")
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1237,33 +1567,33 @@ enum CampaignType {
 }
 
 model Campaign {
-  id              String           @id @default(cuid())
-  tenantId        String
-  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  ownerId         String
-  owner           User             @relation("CampaignOwner", fields: [ownerId], references: [id])
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ownerId  String
+  owner    User   @relation("CampaignOwner", fields: [ownerId], references: [id])
 
   name            String
-  type            CampaignType     @default(EMAIL)
-  status          CampaignStatus   @default(PLANNED)
+  type            CampaignType   @default(EMAIL)
+  status          CampaignStatus @default(PLANNED)
   startDate       DateTime?
   endDate         DateTime?
   // Budget tracking
-  budgetedCost    Decimal?         @db.Decimal(18, 2)
-  actualCost      Decimal?         @db.Decimal(18, 2)
-  expectedRevenue Decimal?         @db.Decimal(18, 2)
+  budgetedCost    Decimal?       @db.Decimal(18, 2)
+  actualCost      Decimal?       @db.Decimal(18, 2)
+  expectedRevenue Decimal?       @db.Decimal(18, 2)
   // Aggregates auto-recalculated from CampaignMember
-  numSent         Int              @default(0)
-  numResponses    Int              @default(0)
-  numConverted    Int              @default(0)
-  description     String?          @db.Text
-  customFields    Json             @default("{}")
+  numSent         Int            @default(0)
+  numResponses    Int            @default(0)
+  numConverted    Int            @default(0)
+  description     String?        @db.Text
+  customFields    Json           @default("{}")
 
-  members         CampaignMember[]
+  members CampaignMember[]
 
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  deletedAt       DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
   @@index([tenantId, status])
   @@index([tenantId, ownerId])
@@ -1282,21 +1612,21 @@ enum CampaignMemberStatus {
 }
 
 model CampaignMember {
-  id           String                @id @default(cuid())
-  tenantId     String
-  tenant       Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  campaignId   String
-  campaign     Campaign              @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  id          String               @id @default(cuid())
+  tenantId    String
+  tenant      Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campaignId  String
+  campaign    Campaign             @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   // Either a Lead or a Contact (one must be set). Standard SF-style attribution.
-  leadId       String?
-  lead         Lead?                 @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  contactId    String?
-  contact      Contact?              @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  status       CampaignMemberStatus  @default(SENT)
-  respondedAt  DateTime?
+  leadId      String?
+  lead        Lead?                @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  contactId   String?
+  contact     Contact?             @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  status      CampaignMemberStatus @default(SENT)
+  respondedAt DateTime?
 
-  createdAt    DateTime              @default(now())
-  updatedAt    DateTime              @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([tenantId, campaignId, leadId, contactId])
   @@index([tenantId, campaignId, status])
@@ -1619,25 +1949,25 @@ model SequenceCounter {
 // ════════════════════════════════════════════════════════════════════════════
 
 model ListView {
-  id            String   @id @default(cuid())
-  tenantId      String
-  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  ownerId       String
-  owner         User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ownerId  String
+  owner    User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
   // "Lead" | "Opportunity" | "Account" | "Contact" | "<custom>__c"
   objectApiName String
   name          String
-  filters       Json     @default("{}")
+  filters       Json    @default("{}")
   sortBy        String?
-  sortDir       String?  // "asc" | "desc"
+  sortDir       String? // "asc" | "desc"
   // Visible to whole tenant when true
-  isShared      Boolean  @default(false)
+  isShared      Boolean @default(false)
   // The user's default view for this object — at most one per (user, object)
-  isDefault     Boolean  @default(false)
+  isDefault     Boolean @default(false)
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tenantId, objectApiName])
   @@index([tenantId, ownerId, objectApiName])
@@ -1660,23 +1990,23 @@ enum NotificationLevel {
 }
 
 model Notification {
-  id        String             @id @default(cuid())
-  tenantId  String
-  tenant    Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  level     NotificationLevel  @default(INFO)
+  level      NotificationLevel @default(INFO)
   // Short category like "activity_due" / "approval_pending" / "ai_high_risk"
-  kind      String
-  title     String
-  body      String?            @db.Text
+  kind       String
+  title      String
+  body       String?           @db.Text
   // Optional CRM target so the UI can deep-link on click
   targetType String?
   targetId   String?
 
-  readAt     DateTime?
-  createdAt  DateTime           @default(now())
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
 
   @@index([tenantId, userId, readAt])
   @@index([tenantId, userId, createdAt])
@@ -1760,13 +2090,13 @@ model CustomRecord {
 // for later inspection/replay by an operator. resolvedAt != null means a human
 // (or replay job) has handled it.
 model WebhookDeadLetter {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   tenantId       String
   url            String
-  method         String   @default("POST")
-  headers        Json     @default("{}")
+  method         String    @default("POST")
+  headers        Json      @default("{}")
   body           String // raw JSON body that was attempted
-  attempts       Int      @default(0)
+  attempts       Int       @default(0)
   lastStatus     Int?
   lastError      String?
   idempotencyKey String
@@ -1775,8 +2105,8 @@ model WebhookDeadLetter {
   recordId       String?
   resolvedAt     DateTime?
   resolvedNote   String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@index([tenantId, resolvedAt, createdAt])
   @@index([tenantId, idempotencyKey])
@@ -1796,40 +2126,40 @@ model WebhookDeadLetter {
 // Person only carries identity-grade data (name, normalized email/phone).
 
 model Person {
-  id        String  @id @default(cuid())
-  tenantId  String
-  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   // Canonical identity values (normalized: lowercase email, digits-only phone)
-  primaryEmail      String?
-  primaryEmailNorm  String? // lowercase, trimmed — used for fuzzy match
-  primaryPhone      String?
-  primaryPhoneNorm  String? // digits only — used for fuzzy match
-  firstName         String?
-  lastName          String?
-  fullNameNorm      String? // lowercase concatenated for fuzzy match
+  primaryEmail     String?
+  primaryEmailNorm String? // lowercase, trimmed — used for fuzzy match
+  primaryPhone     String?
+  primaryPhoneNorm String? // digits only — used for fuzzy match
+  firstName        String?
+  lastName         String?
+  fullNameNorm     String? // lowercase concatenated for fuzzy match
 
   // Free-form identity data (alternate emails/phones, social handles, etc.)
   identifiers Json @default("[]") // [{kind: "email"|"phone"|"linkedin"|..., value, source, verifiedAt}]
 
   // Counts for fast Customer 360 list views
-  leadCount       Int @default(0)
-  contactCount    Int @default(0)
-  campaignCount   Int @default(0)
-  caseCount       Int @default(0)
+  leadCount        Int @default(0)
+  contactCount     Int @default(0)
+  campaignCount    Int @default(0)
+  caseCount        Int @default(0)
   opportunityCount Int @default(0)
 
   // Soft-merge support: when two Persons get merged, the loser's ID points here.
   mergedIntoId String?
-  mergedInto   Person?  @relation("PersonMerge", fields: [mergedIntoId], references: [id])
-  mergedFrom   Person[] @relation("PersonMerge")
+  mergedInto   Person?   @relation("PersonMerge", fields: [mergedIntoId], references: [id])
+  mergedFrom   Person[]  @relation("PersonMerge")
   mergedAt     DateTime?
 
   leads    Lead[]    @relation("LeadPerson")
   contacts Contact[] @relation("ContactPerson")
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
   @@index([tenantId, primaryEmailNorm])
@@ -1843,7 +2173,7 @@ model Person {
 // order on Lead/Contact write; if any rule matches an existing Person the
 // new record links to that Person. If none match a fresh Person is created.
 model IdentityRule {
-  id          String  @id @default(cuid())
+  id          String   @id @default(cuid())
   tenantId    String
   name        String
   description String?
@@ -1851,9 +2181,9 @@ model IdentityRule {
   //             "fuzzy_name" | "first_letter_lastname_email"
   comparator  String
   // Block on match (don't auto-merge, surface as DedupeCandidate)
-  surfaceOnly Boolean @default(false)
-  isActive    Boolean @default(true)
-  priority    Int     @default(100)
+  surfaceOnly Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  priority    Int      @default(100)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -1864,20 +2194,20 @@ model IdentityRule {
 // When the rule says surfaceOnly=true (or two equally-good matches exist),
 // the candidate match is parked here for a human to confirm/reject.
 model DedupeCandidate {
-  id          String  @id @default(cuid())
-  tenantId    String
+  id                String    @id @default(cuid())
+  tenantId          String
   // What just got created/updated
-  sourceType  String  // "lead" | "contact"
-  sourceId    String
+  sourceType        String // "lead" | "contact"
+  sourceId          String
   // What it might be a duplicate of
   candidatePersonId String
-  ruleId      String? // which rule fired
-  score       Float   // 0..1 — confidence
-  status      String  @default("pending") // pending | confirmed_merge | rejected
-  resolvedAt  DateTime?
-  resolvedById String?
-  resolvedNote String?
-  createdAt   DateTime @default(now())
+  ruleId            String? // which rule fired
+  score             Float // 0..1 — confidence
+  status            String    @default("pending") // pending | confirmed_merge | rejected
+  resolvedAt        DateTime?
+  resolvedById      String?
+  resolvedNote      String?
+  createdAt         DateTime  @default(now())
 
   @@index([tenantId, status, createdAt])
   @@index([tenantId, sourceType, sourceId])
@@ -1893,15 +2223,15 @@ model DedupeCandidate {
 // fanned out to the platform event bus.
 
 model WebhookEndpoint {
-  id            String   @id @default(cuid())
+  id            String                @id @default(cuid())
   tenantId      String
-  slug          String   @unique // path component
+  slug          String                @unique // path component
   description   String?
-  signingSecret String              // shared with caller for HMAC verification
-  eventType     String?             // label inserted into the dispatched event name
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  signingSecret String // shared with caller for HMAC verification
+  eventType     String? // label inserted into the dispatched event name
+  isActive      Boolean               @default(true)
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
   inboundEvents WebhookInboundEvent[]
 
   @@index([tenantId, isActive])
@@ -1915,7 +2245,7 @@ model WebhookInboundEvent {
   endpoint       WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
   idempotencyKey String
   headers        Json            @default("{}")
-  body           String          // raw JSON body
+  body           String // raw JSON body
   receivedAt     DateTime
   processedAt    DateTime?
   attempts       Int             @default(0)
@@ -1948,4 +2278,403 @@ model RecycleBinEntry {
   @@index([tenantId, restoredAt, purgeAfter])
   @@index([tenantId, recordType])
   @@map("recycle_bin_entries")
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// REPORTS & DASHBOARDS (Wave 19a)
+// ════════════════════════════════════════════════════════════════════════════
+// Salesforce-style Reports + Dashboards. ReportType describes the queryable
+// surface (base object + permitted joins + columns). ReportDef is a saved
+// query (columns / filters / groupBy / aggregates) on top of a ReportType.
+// Dashboards collect ReportDef rows into grid-laid-out visual components.
+
+model ReportType {
+  // A "report type" defines the base object + which related objects can join.
+  // SF concept: "Opportunities with Account and Owner" is a report type.
+  id               String      @id @default(cuid())
+  tenantId         String
+  tenant           Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  apiName          String // tenant-unique e.g. "opportunities_with_account"
+  label            String
+  baseObject       String // "opportunity" | "lead" | etc.
+  // joinable: list of {object, foreignKey, alias} — for now stored as JSON
+  joins            Json        @default("[]")
+  // available column names from base + joined objects
+  availableColumns Json        @default("[]")
+  isStandard       Boolean     @default(false)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  reports          ReportDef[]
+
+  @@unique([tenantId, apiName])
+  @@map("report_types")
+}
+
+model ReportDef {
+  id           String               @id @default(cuid())
+  tenantId     String
+  tenant       Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  reportTypeId String
+  reportType   ReportType           @relation(fields: [reportTypeId], references: [id], onDelete: Cascade)
+  ownerId      String
+  // "tabular" | "summary" | "matrix"
+  format       String               @default("tabular")
+  name         String
+  description  String?
+  // selected columns + filter list (SOQL-like) + groupBy + sortBy + aggregates
+  // Stored as a single JSON for flexibility:
+  // {
+  //   columns: ["account.name","amount","stage","owner.displayName"],
+  //   filters: [{field,op,value}, ...],
+  //   groupBy: ["stage"],          // tabular: empty
+  //   aggregates: [{type:"sum",field:"amount"}, {type:"count"}],
+  //   sortBy: [{field:"amount",direction:"desc"}],
+  //   limit: 1000
+  // }
+  config       Json
+  isPublic     Boolean              @default(false)
+  folderName   String? // simple grouping; SF has Report Folders, we keep flat for v1
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  components   DashboardComponent[]
+
+  @@index([tenantId, ownerId])
+  @@map("report_defs")
+}
+
+model Dashboard {
+  id          String               @id @default(cuid())
+  tenantId    String
+  tenant      Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ownerId     String
+  name        String
+  description String?
+  // grid layout: array of {componentId, x, y, w, h}
+  layout      Json                 @default("[]")
+  isPublic    Boolean              @default(false)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  components  DashboardComponent[]
+
+  @@index([tenantId, ownerId])
+  @@map("dashboards")
+}
+
+model DashboardComponent {
+  id            String    @id @default(cuid())
+  tenantId      String
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  dashboardId   String
+  dashboard     Dashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+  reportId      String
+  report        ReportDef @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  // "table" | "bar" | "line" | "pie" | "metric" | "donut"
+  visualization String    @default("table")
+  title         String
+  // chart-specific config (axes, colors, legend) as JSON
+  options       Json      @default("{}")
+  position      Json      @default("{}") // {x, y, w, h}
+  createdAt     DateTime  @default(now())
+
+  @@index([tenantId, dashboardId])
+  @@map("dashboard_components")
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// CPQ — BUNDLES + TIERED PRICING (Wave 19e)
+// ════════════════════════════════════════════════════════════════════════════
+// ProductBundle: a parent product with required + optional child products.
+// Example: "iPhone 套装" includes 1 iPhone + optional case + optional charger.
+model ProductBundle {
+  id             String   @id @default(cuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // The parent "wrapper" product. Bundles are themselves Products so they
+  // appear in price books / quote line items normally.
+  productId      String   @unique
+  product        Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  // "all_or_nothing" | "configurable" — drives whether children must be
+  // included as a unit or selected
+  type           String   @default("configurable")
+  // Whether the bundle's price equals sum-of-children (false) or is fixed
+  // and discounts/markups distribute over children (true)
+  fixedPrice     Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  items          BundleItem[]
+
+  @@index([tenantId])
+  @@map("product_bundles")
+}
+
+model BundleItem {
+  id              String   @id @default(cuid())
+  bundleId        String
+  bundle          ProductBundle @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  childProductId  String
+  childProduct    Product  @relation("BundleChild", fields: [childProductId], references: [id])
+  required        Boolean  @default(true)
+  defaultQuantity Decimal  @default(1) @db.Decimal(18, 4)
+  minQuantity     Decimal  @default(1) @db.Decimal(18, 4)
+  maxQuantity     Decimal? @db.Decimal(18, 4)
+  // Sort order within the bundle
+  displayOrder    Int      @default(0)
+
+  @@index([bundleId])
+  @@map("bundle_items")
+}
+
+// Tiered price rule: discount based on quantity or list-price thresholds.
+// Replaces and extends the existing PriceRule (which becomes a
+// general-purpose container).
+model PriceTier {
+  id              String   @id @default(cuid())
+  tenantId        String
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productId       String
+  product         Product  @relation("ProductTiers", fields: [productId], references: [id], onDelete: Cascade)
+  // Optional priceBook context — if set, only applies to this priceBook.
+  priceBookId     String?
+  // Tier triggers on quantity ≥ this value
+  minQuantity     Decimal  @db.Decimal(18, 4)
+  // The tier's effect: either a fixed unitPrice OR a discount percentage
+  unitPrice       Decimal? @db.Decimal(18, 4)
+  discountPercent Decimal? @db.Decimal(5, 2) // 0..100
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([tenantId, productId, minQuantity])
+  @@map("price_tiers")
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// TERRITORY MANAGEMENT — SF-style hierarchical territories (Wave 19f)
+// ════════════════════════════════════════════════════════════════════════════
+// Enterprise sales orgs assign reps not just by individual ownership but by
+// territory. Territories are hierarchical, can have multiple owners, and
+// assignment rules auto-route Accounts to territories based on attributes
+// (country, industry, revenue band, etc).
+
+model Territory {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  apiName      String
+  label        String
+  description  String?
+  parentId     String?
+  parent       Territory? @relation("TerritoryParent", fields: [parentId], references: [id], onDelete: SetNull)
+  children     Territory[] @relation("TerritoryParent")
+  isActive     Boolean  @default(true)
+  // Type discriminator: "geographic" | "industry" | "named_account" | "other"
+  type         String   @default("geographic")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  members      UserTerritory[]
+  accounts     AccountTerritory[]
+  rules        TerritoryAssignmentRule[]
+  @@unique([tenantId, apiName])
+  @@index([tenantId, parentId])
+  @@map("territories")
+}
+
+model UserTerritory {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User     @relation("UserTerritoryRel", fields: [userId], references: [id], onDelete: Cascade)
+  territoryId  String
+  territory    Territory @relation(fields: [territoryId], references: [id], onDelete: Cascade)
+  // Role in the territory: "owner" | "rep" | "manager" | "view_only"
+  roleInTerritory String  @default("rep")
+  isPrimary    Boolean  @default(false)  // exactly one primary per user (the "home" territory)
+  createdAt    DateTime @default(now())
+  @@unique([userId, territoryId])
+  @@index([territoryId])
+  @@map("user_territories")
+}
+
+model AccountTerritory {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  accountId    String
+  account      Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  territoryId  String
+  territory    Territory @relation(fields: [territoryId], references: [id], onDelete: Cascade)
+  // "auto" (set by rule) | "manual" (set by admin) | "inherited" (from parent)
+  source       String   @default("auto")
+  isPrimary    Boolean  @default(false)
+  assignedAt   DateTime @default(now())
+  @@unique([accountId, territoryId])
+  @@index([territoryId])
+  @@map("account_territories")
+}
+
+model TerritoryAssignmentRule {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  territoryId  String
+  territory    Territory @relation(fields: [territoryId], references: [id], onDelete: Cascade)
+  name         String
+  description  String?
+  // SOQL-like predicate evaluated against Account record. Examples:
+  //   { field: "billingCountry", op: "in", value: ["CN","HK"] }
+  //   { field: "industry", op: "=", value: "fintech" }
+  // Stored as JSON; evaluated by the assignment service.
+  conditions   Json     @default("[]")
+  // Combine: "all" (AND) or "any" (OR)
+  matchType    String   @default("all")
+  priority     Int      @default(100)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  @@index([tenantId, territoryId, isActive, priority])
+  @@map("territory_assignment_rules")
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// SHARING — Org-Wide Defaults, Public Groups, Queues (Wave 19c)
+// ════════════════════════════════════════════════════════════════════════════
+// Salesforce-style sharing primitives layered on top of RecordShare:
+//   • OrgWideDefault: per-object baseline ("private" | "public_read" | "public_read_write")
+//   • PublicGroup: named groups of users/roles, usable as a share grantee
+//   • Queue: assignment queue for unowned work; backed by a PublicGroup of
+//     who can claim items from it. Lead.queueId / Case.queueId mark records
+//     currently sitting in a queue; effective ownership is `queueId ?? ownerId`.
+// ════════════════════════════════════════════════════════════════════════════
+
+model OrgWideDefault {
+  id              String   @id @default(cuid())
+  tenantId        String
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  objectApiName   String   // "lead" | "account" | "opportunity" | ...
+  // "private" | "public_read" | "public_read_write"
+  internalSharing String   @default("public_read_write")
+  // future: external community defaults — keep nullable
+  externalSharing String?
+  // Grant-by-hierarchy is a separate toggle in SF; default true (subordinates'
+  // records visible to managers).
+  grantHierarchy  Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([tenantId, objectApiName])
+  @@map("org_wide_defaults")
+}
+
+model PublicGroup {
+  id           String              @id @default(cuid())
+  tenantId     String
+  tenant       Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  apiName      String              // tenant-unique e.g. "sales_emea"
+  label        String
+  description  String?
+  isActive     Boolean             @default(true)
+  members      PublicGroupMember[]
+  recordShares RecordShare[]       @relation("GroupShare")
+  queues       Queue[]
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  @@unique([tenantId, apiName])
+  @@map("public_groups")
+}
+
+model PublicGroupMember {
+  id        String      @id @default(cuid())
+  groupId   String
+  group     PublicGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  // Member is either a User OR a Role (transitively all users in that role).
+  // SF supports nested groups too; v1 keeps it 2-level.
+  userId    String?
+  roleId    String?
+  // future: nestedGroupId for group-of-groups
+  createdAt DateTime    @default(now())
+
+  @@unique([groupId, userId, roleId])
+  @@index([groupId])
+  @@map("public_group_members")
+}
+
+model Queue {
+  id               String       @id @default(cuid())
+  tenantId         String
+  tenant           Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  apiName          String       // "unassigned_leads"
+  label            String
+  // Which objects can be assigned to this queue
+  supportedObjects String[]
+  // Members who can claim items from this queue. Modeled via a PublicGroup link.
+  groupId          String?
+  group            PublicGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  leads            Lead[]       @relation("LeadQueue")
+  cases            Case[]       @relation("CaseQueue")
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@unique([tenantId, apiName])
+  @@map("queues")
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// LOCALIZATION (Wave 19g)
+// ════════════════════════════════════════════════════════════════════════════
+//
+// Multi-currency exchange rates and metadata-label translations enable
+// international rollouts of the CRM. Both are tenant-scoped — every tenant
+// maintains its own FX table and its own per-locale label overrides.
+//
+// `Tenant.settings.corporateCurrency` (Json) is the conversion target for
+// `convertedAmount` rollups on Opportunity / Quote / Order. Defaults to "CNY".
+
+model CurrencyRate {
+  id            String    @id @default(cuid())
+  tenantId      String
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // 3-letter ISO 4217 codes — CNY, USD, EUR, JPY, ...
+  fromCurrency  String
+  toCurrency    String
+  // 1 unit fromCurrency = `rate` units toCurrency.
+  rate          Decimal   @db.Decimal(18, 8)
+  // Effective window. Multiple rows per (from,to) pair are allowed; the
+  // service picks the row whose effectiveFrom ≤ asOf and effectiveTo > asOf
+  // (or null = open).
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  source        String    @default("manual") // "manual" | "ecb" | "boc" — provenance
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([tenantId, fromCurrency, toCurrency, effectiveFrom])
+  @@index([tenantId, fromCurrency, toCurrency, effectiveFrom])
+  @@map("currency_rates")
+}
+
+model LabelTranslation {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // Polymorphic key:
+  //   entityType ∈ { "object", "field", "picklist", "picklist_value" }
+  //   entityId    = id of the corresponding ObjectDef / FieldDef / Picklist /
+  //                 PicklistValue row.
+  entityType  String
+  entityId    String
+  // BCP-47 locale: zh-CN, en-US, ja-JP, ...
+  locale      String
+  // Per-locale overrides — any of these may be null to fall back to the
+  // canonical column.
+  label       String?
+  description String?
+  helpText    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([tenantId, entityType, entityId, locale])
+  @@index([tenantId, entityType, locale])
+  @@map("label_translations")
 }

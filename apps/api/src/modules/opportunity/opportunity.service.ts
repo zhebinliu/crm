@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -13,6 +13,8 @@ import type { RequestUser } from '../../common/types/request-context';
 import { RecycleBinService } from '../recycle-bin/recycle-bin.service';
 import { EmbeddingService, opportunityContent } from '../embeddings/embedding.service';
 import { FlsService } from '../fls/fls.service';
+import { RecordTypeService } from '../metadata/record-type.service';
+import { CurrencyService } from '../currency/currency.service';
 
 export interface OppListOptions {
   search?: string;
@@ -46,6 +48,8 @@ export class OpportunityService extends BaseEntityService {
     recycleBin: RecycleBinService,
     private readonly fls: FlsService,
     embeddings: EmbeddingService,
+    private readonly recordTypes: RecordTypeService,
+    @Optional() private readonly currency?: CurrencyService,
   ) {
     super(workflow, validation, audit, emitter, outbox, recycleBin);
     this.embeddings = embeddings;
@@ -120,6 +124,9 @@ export class OpportunityService extends BaseEntityService {
   }
 
   async create(tenantId: string, input: Record<string, unknown>, user: RequestUser) {
+    // Wave 19b: default Record Type before validation so RT-scoped picklists
+    // and validation rules see the correct subtype.
+    await this.recordTypes.applyDefaults(tenantId, 'opportunity', input);
     await this.fls.assertWritable(user, 'opportunity', input);
     await this.beforeSave(tenantId, 'opportunity', input, undefined, user);
 
@@ -148,6 +155,9 @@ export class OpportunityService extends BaseEntityService {
     };
 
     const opp = await this.prisma.opportunity.create({ data });
+
+    // Wave 19g — fire-and-forget convertedAmount rollup.
+    if (this.currency) void this.currency.applyAfterSave('opportunity', tenantId, opp.id);
 
     await this.afterCreate(tenantId, 'opportunity', opp as Record<string, unknown>, user);
     return opp;
@@ -178,6 +188,11 @@ export class OpportunityService extends BaseEntityService {
       where: { id },
       data: { ...(input as any), ...closeDatePatch, ...stagePatch, updatedById: user.id },
     });
+
+    // Wave 19g — refresh convertedAmount when amount or currency may have changed.
+    if (this.currency && (input.amount !== undefined || input.currencyCode !== undefined)) {
+      void this.currency.applyAfterSave('opportunity', tenantId, id);
+    }
 
     if (input.stage && input.stage !== previous.stage) {
       this.emitter.emit(EVENTS.OPP_STAGE_CHANGED, { tenantId, opportunityId: id, previousStage: previous.stage, newStage: input.stage, user });
@@ -271,9 +286,12 @@ export class OpportunityService extends BaseEntityService {
   private async recalculateAmount(oppId: string) {
     const items = await this.prisma.opportunityLineItem.findMany({ where: { opportunityId: oppId } });
     const amount = items.reduce((sum, li) => sum.plus(li.subtotal), new Decimal(0));
-    return this.prisma.opportunity.update({
+    const updated = await this.prisma.opportunity.update({
       where: { id: oppId },
       data: { amount },
     });
+    // Wave 19g — keep convertedAmount in sync after rollup.
+    if (this.currency) void this.currency.applyAfterSave('opportunity', updated.tenantId, oppId);
+    return updated;
   }
 }

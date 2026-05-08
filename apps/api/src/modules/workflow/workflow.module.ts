@@ -13,11 +13,13 @@ import { ActionsModule } from './actions/actions.module';
 import { AuditService } from './audit.service';
 import { AuditLogController } from './audit-log.controller';
 import { WebhookDlqController } from './webhook-dlq.controller';
+import { MetadataModule } from '../metadata/metadata.module';
 
 @Module({
   imports: [
     BullModule.registerQueue({ name: 'workflow' }),
     ActionsModule,
+    MetadataModule,
   ],
   providers: [
     WorkflowService,

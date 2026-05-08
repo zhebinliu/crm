@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Put } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { IsArray, IsEnum, IsNumber, IsOptional, IsString } from 'class-validator';
 import { MetadataService } from './metadata.service';
@@ -39,7 +39,11 @@ export class MetadataController {
 
   @Get('objects/:apiName')
   @RequirePermissions('metadata.read')
-  getObject(@TenantId() tid: string, @Param('apiName') name: string) { return this.svc.getObject(tid, name); }
+  getObject(
+    @TenantId() tid: string,
+    @Param('apiName') name: string,
+    @Query('lang') lang?: string,
+  ) { return this.svc.getObject(tid, name, lang); }
 
   @Post('objects')
   @RequirePermissions('admin.*')
@@ -124,4 +128,22 @@ export class MetadataController {
   saveLayout(@TenantId() tid: string, @Param('apiName') name: string, @Body() body: { sections: unknown[] }) {
     return this.svc.saveLayout(tid, name, body.sections);
   }
+}
+
+// ── Public metadata read surface (Wave 19g) ──────────────────────────────
+// `/api/metadata/objects/:apiName?lang=en-US` returns the same object def
+// as the admin endpoint but with translations applied. Locale resolution
+// order: explicit ?lang= → req.locale (set by LocaleMiddleware) → default.
+@ApiTags('metadata')
+@Controller('metadata')
+export class PublicMetadataController {
+  constructor(private readonly svc: MetadataService) {}
+
+  @Get('objects/:apiName')
+  @RequirePermissions('metadata.read')
+  getObject(
+    @TenantId() tid: string,
+    @Param('apiName') name: string,
+    @Query('lang') lang?: string,
+  ) { return this.svc.getObject(tid, name, lang); }
 }
