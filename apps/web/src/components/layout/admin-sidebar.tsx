@@ -10,6 +10,7 @@ import {
   ShieldCheck, KeyRound,
   Package,
   MapPin,
+  Coins, Languages,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth';
 import { useRouter } from 'next/navigation';
@@ -50,6 +51,8 @@ const ADMIN_NAV: NavItem[] = [
   { label: '回收站', href: '/admin/recycle-bin', icon: <Trash2 size={18} /> },
   { label: 'GDPR 数据主体', href: '/admin/gdpr', icon: <FileLock2 size={18} /> },
   { label: 'Webhook DLQ', href: '/admin/webhook-dlq', icon: <Webhook size={18} /> },
+  { label: '货币与汇率', href: '/admin/currency', icon: <Coins size={18} /> },
+  { label: '多语言翻译', href: '/admin/i18n', icon: <Languages size={18} /> },
 ];
 
 const SHARING_NAV: NavGroup = {

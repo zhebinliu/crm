@@ -2,6 +2,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { AdminSidebar } from '@/components/layout/admin-sidebar';
+import { LocaleSwitcher } from '@/components/layout/locale-switcher';
 import { useAuthStore } from '@/stores/auth';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -24,6 +25,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <main className="flex-1 ml-[var(--sidebar-w)] min-h-screen overflow-x-hidden">
         {children}
       </main>
+      <LocaleSwitcher />
     </div>
   );
 }

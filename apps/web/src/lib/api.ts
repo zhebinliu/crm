@@ -36,6 +36,8 @@ api.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
     const token = localStorage.getItem('tw_access_token');
     if (token) config.headers.Authorization = `Bearer ${token}`;
+    const locale = localStorage.getItem('tokenwave.locale');
+    if (locale) config.headers['Accept-Language'] = locale;
   }
   return config;
 });
@@ -534,7 +536,6 @@ export const webhookDlqApi = {
     api.post(`/admin/webhook-dlq/${id}/resolve`, { note }).then((r) => r.data),
 };
 
-<<<<<<< HEAD
 // ── Reports + Dashboards (Wave 19a / 20a) ─────────────────────────────────
 
 export type ReportFormat = 'tabular' | 'summary' | 'matrix';
@@ -839,6 +840,58 @@ export const territoryApi = {
     api.delete(`/admin/territories/${id}/rules/${ruleId}`).then((r) => r.data),
 
   runAllRules: () => api.post('/admin/territories/run-rules').then((r) => r.data),
+};
+
+// ── Currency rates (Wave 19g admin) ────────────────────────────────────────
+
+export const currencyApi = {
+  list: (p?: { from?: string; to?: string }) =>
+    api.get('/admin/currency-rates', { params: p }).then((r) => r.data),
+  effective: (from: string, to: string, asOf?: string) =>
+    api
+      .get('/admin/currency-rates/effective', { params: { from, to, asOf } })
+      .then((r) => r.data),
+  create: (d: {
+    fromCurrency: string;
+    toCurrency: string;
+    rate: number;
+    effectiveFrom: string;
+    effectiveTo?: string | null;
+    source?: string;
+  }) => api.post('/admin/currency-rates', d).then((r) => r.data),
+  update: (
+    id: string,
+    d: Partial<{
+      rate: number;
+      effectiveFrom: string;
+      effectiveTo: string | null;
+      source: string;
+    }>,
+  ) => api.patch(`/admin/currency-rates/${id}`, d).then((r) => r.data),
+  remove: (id: string) => api.delete(`/admin/currency-rates/${id}`).then((r) => r.data),
+  recompute: () => api.post('/admin/currency-rates/recompute').then((r) => r.data),
+};
+
+// ── Translations (Wave 19g admin) ──────────────────────────────────────────
+
+export type TranslationEntityType = 'object' | 'field' | 'picklist' | 'picklist_value';
+
+export const translationApi = {
+  list: (p?: { entityType?: TranslationEntityType; locale?: string }) =>
+    api.get('/admin/translations', { params: p }).then((r) => r.data),
+  upsert: (
+    entityType: TranslationEntityType,
+    entityId: string,
+    locale: string,
+    d: { label?: string; description?: string; helpText?: string },
+  ) =>
+    api
+      .put(`/admin/translations/${entityType}/${entityId}/${locale}`, d)
+      .then((r) => r.data),
+  remove: (entityType: TranslationEntityType, entityId: string, locale: string) =>
+    api
+      .delete(`/admin/translations/${entityType}/${entityId}/${locale}`)
+      .then((r) => r.data),
 };
 
 export const genericApi = {
