@@ -648,6 +648,97 @@ export const dashboardApi = {
     api.delete(`/dashboards/${id}/components/${componentId}`).then((r) => r.data),
 };
 
+// ── Sharing: OWD / Public Groups / Queues (Wave 19c / 20c) ─────────────────
+
+export type InternalSharing = 'private' | 'public_read' | 'public_read_write';
+
+export interface ResolvedOwd {
+  objectApiName: string;
+  internalSharing: InternalSharing;
+  externalSharing: string | null;
+  grantHierarchy: boolean;
+  isDefault?: boolean;
+}
+
+export const owdApi = {
+  list: (): Promise<ResolvedOwd[]> => api.get('/admin/owd').then((r) => r.data),
+  get: (objectApiName: string): Promise<ResolvedOwd> =>
+    api.get(`/admin/owd/${objectApiName}`).then((r) => r.data),
+  set: (
+    objectApiName: string,
+    dto: { internalSharing: InternalSharing; externalSharing?: string | null; grantHierarchy: boolean },
+  ) => api.put(`/admin/owd/${objectApiName}`, dto).then((r) => r.data),
+};
+
+export interface PublicGroupSummary {
+  id: string;
+  apiName: string;
+  label: string;
+  description: string | null;
+  isActive: boolean;
+  createdAt: string;
+  _count?: { members: number };
+}
+
+export interface PublicGroupMember {
+  id: string;
+  groupId: string;
+  userId: string | null;
+  roleId: string | null;
+  createdAt: string;
+}
+
+export interface PublicGroupDetail extends PublicGroupSummary {
+  members: PublicGroupMember[];
+}
+
+export const publicGroupsApi = {
+  list: (): Promise<PublicGroupSummary[]> =>
+    api.get('/admin/public-groups').then((r) => r.data),
+  get: (id: string): Promise<PublicGroupDetail> =>
+    api.get(`/admin/public-groups/${id}`).then((r) => r.data),
+  create: (d: { apiName: string; label: string; description?: string | null; isActive?: boolean }) =>
+    api.post('/admin/public-groups', d).then((r) => r.data),
+  update: (id: string, d: { label?: string; description?: string | null; isActive?: boolean }) =>
+    api.patch(`/admin/public-groups/${id}`, d).then((r) => r.data),
+  remove: (id: string) => api.delete(`/admin/public-groups/${id}`).then((r) => r.data),
+  addMember: (id: string, d: { userId?: string | null; roleId?: string | null }) =>
+    api.post(`/admin/public-groups/${id}/members`, d).then((r) => r.data),
+  removeMember: (id: string, memberId: string) =>
+    api.delete(`/admin/public-groups/${id}/members/${memberId}`).then((r) => r.data),
+};
+
+export interface QueueSummary {
+  id: string;
+  apiName: string;
+  label: string;
+  supportedObjects: string[];
+  groupId: string | null;
+  group?: { id: string; apiName: string; label: string } | null;
+  createdAt: string;
+}
+
+export interface QueueItem {
+  recordType: string;
+  id: string;
+  label: string;
+}
+
+export const queuesApi = {
+  list: (): Promise<QueueSummary[]> => api.get('/admin/queues').then((r) => r.data),
+  get: (id: string): Promise<QueueSummary> => api.get(`/admin/queues/${id}`).then((r) => r.data),
+  create: (d: { apiName: string; label: string; supportedObjects: string[]; groupId?: string | null }) =>
+    api.post('/admin/queues', d).then((r) => r.data),
+  update: (
+    id: string,
+    d: { label?: string; supportedObjects?: string[]; groupId?: string | null },
+  ) => api.patch(`/admin/queues/${id}`, d).then((r) => r.data),
+  remove: (id: string) => api.delete(`/admin/queues/${id}`).then((r) => r.data),
+  items: (id: string): Promise<QueueItem[]> => api.get(`/queues/${id}/items`).then((r) => r.data),
+  claim: (id: string, recordType: 'lead' | 'case', recordId: string) =>
+    api.post(`/queues/${id}/claim`, { recordType, recordId }).then((r) => r.data),
+};
+
 export const genericApi = {
   list: (objName: string, p?: Record<string, unknown>) => api.get(`/records/${objName}`, { params: p }).then(r => r.data),
   get: (objName: string, id: string) => api.get(`/records/${objName}/${id}`).then(r => r.data),

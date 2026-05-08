@@ -6,6 +6,7 @@ import {
   Users, Settings,
   Workflow, Shield, LogOut, ArrowLeft, LayoutDashboard, Database, Mail, Sparkles, History, ShieldAlert,
   UserSearch, Trash2, FileLock2, Webhook, BarChart3, PieChart, Layers,
+  Globe, UsersRound, Inbox, Share2,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth';
 import { useRouter } from 'next/navigation';
@@ -17,6 +18,12 @@ interface NavItem {
   label: string;
   href: string;
   icon: React.ReactNode;
+}
+
+interface NavGroup {
+  label: string;
+  icon: React.ReactNode;
+  items: NavItem[];
 }
 
 const ADMIN_NAV: NavItem[] = [
@@ -37,6 +44,16 @@ const ADMIN_NAV: NavItem[] = [
   { label: 'GDPR 数据主体', href: '/admin/gdpr', icon: <FileLock2 size={18} /> },
   { label: 'Webhook DLQ', href: '/admin/webhook-dlq', icon: <Webhook size={18} /> },
 ];
+
+const SHARING_NAV: NavGroup = {
+  label: '共享',
+  icon: <Share2 size={18} />,
+  items: [
+    { label: 'OWD', href: '/admin/sharing/owd', icon: <Globe size={16} /> },
+    { label: '群组', href: '/admin/sharing/groups', icon: <UsersRound size={16} /> },
+    { label: '队列', href: '/admin/sharing/queues', icon: <Inbox size={16} /> },
+  ],
+};
 
 export function AdminSidebar() {
   const pathname = usePathname();
@@ -84,6 +101,17 @@ export function AdminSidebar() {
             <span className="text-[10px] font-bold text-[#4B4E56] uppercase tracking-widest">系统管理</span>
           </div>
           {ADMIN_NAV.map((item) => (
+            <AdminNavLink key={item.href} item={item} pathname={pathname} />
+          ))}
+
+          {/* 共享 group */}
+          <div className="px-2 pt-4 pb-2">
+            <span className="text-[10px] font-bold text-[#4B4E56] uppercase tracking-widest inline-flex items-center gap-1.5">
+              {SHARING_NAV.icon}
+              {SHARING_NAV.label}
+            </span>
+          </div>
+          {SHARING_NAV.items.map((item) => (
             <AdminNavLink key={item.href} item={item} pathname={pathname} />
           ))}
         </div>
