@@ -1,3 +1,7 @@
+// OpenTelemetry MUST initialize before anything that gets auto-instrumented
+// (Nest, Prisma, http, ioredis, BullMQ). Keep this as the first import.
+// No-op unless OTEL_ENABLED=true.
+import './tracing';
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
@@ -14,7 +18,11 @@ async function bootstrap() {
   });
   const config = app.get(ConfigService);
 
-  app.setGlobalPrefix('api', { exclude: ['health', 'graphql'] });
+  // /healthz/* endpoints (live, ready) sit OUTSIDE the /api prefix so K8s
+  // probes can hit them at predictable paths without authn or versioning.
+  app.setGlobalPrefix('api', {
+    exclude: ['health', 'healthz/live', 'healthz/ready', 'graphql'],
+  });
 
   // API versioning alias: route /api/v1/* → /api/* internally so external
   // integrations can pin a version. Existing unversioned URLs keep working

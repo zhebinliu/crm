@@ -75,6 +75,23 @@ export class WorkflowService {
     ctx: TriggerContext,
   ): Promise<void> {
     const startedAt = Date.now();
+    // Capture the active OTel trace context at rule-execution time. Passed
+    // through `extra.traceparent` so SendWebhookAction can forward it as
+    // an HTTP header → receiving system can continue the same trace.
+    let traceparent: string | undefined;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const otel = require('@opentelemetry/api');
+      const span = otel.trace?.getSpan?.(otel.context?.active?.());
+      const sc = span?.spanContext?.();
+      if (sc?.traceId && sc?.spanId) {
+        const flags = (sc.traceFlags ?? 0).toString(16).padStart(2, '0');
+        traceparent = `00-${sc.traceId}-${sc.spanId}-${flags}`;
+      }
+    } catch {
+      // OTel optional
+    }
+
     const evalCtx: EvalContext = {
       record: ctx.record,
       previous: ctx.previous,
@@ -84,6 +101,7 @@ export class WorkflowService {
         objectApiName: ctx.objectApiName,
         recordId: ctx.record['id'] as string,
         event: ctx.trigger,
+        ...(traceparent ? { traceparent } : {}),
       },
     };
 
