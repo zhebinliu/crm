@@ -86,7 +86,7 @@ const STAGE_META: Record<string, { label: string; color: string }> = {
   needs_analysis:    { label: '需求分析', color: 'bg-indigo-400' },
   value_proposition: { label: '价值主张', color: 'bg-violet-400' },
   proposal:          { label: '方案提案', color: 'bg-amber-400' },
-  negotiation:       { label: '谈判议价', color: 'bg-orange-400' },
+  negotiation:       { label: '谈判议价', color: 'bg-cyan-400' },
   closed_won:        { label: '赢单', color: 'bg-emerald-500' },
   closed_lost:       { label: '败单', color: 'bg-red-400' },
 };
@@ -718,7 +718,7 @@ function AccountInsightsTab({ accounts }: { accounts: any[] }) {
 
   const INDUSTRY_COLORS = [
     'bg-blue-400', 'bg-violet-400', 'bg-emerald-400', 'bg-amber-400',
-    'bg-orange-400', 'bg-indigo-400', 'bg-teal-400', 'bg-rose-400',
+    'bg-cyan-400', 'bg-indigo-400', 'bg-teal-400', 'bg-rose-400',
   ];
 
   // Top 10 by annual revenue

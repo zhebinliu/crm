@@ -74,7 +74,7 @@ const TYPE_COLOR: Record<string, string> = {
   BOOLEAN: 'bg-violet-50 text-violet-500',
   DATE: 'bg-slate-50 text-slate-500',
   DATETIME: 'bg-slate-50 text-slate-500',
-  PICKLIST: 'bg-orange-50 text-orange-500',
+  PICKLIST: 'bg-cyan-50 text-cyan-500',
   REFERENCE: 'bg-indigo-50 text-indigo-500',
 };
 

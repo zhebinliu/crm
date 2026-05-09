@@ -224,8 +224,8 @@ export function EditFieldModal({ field, objectApiName, open, onClose }: Props) {
 
           {/* Picklist value editor */}
           {isPicklist && field.picklistId && (
-            <div className="rounded-2xl bg-orange-50/40 border border-orange-100 p-5 space-y-3">
-              <Label className="text-[10px] font-black uppercase text-orange-600 tracking-wider">下拉选项</Label>
+            <div className="rounded-2xl bg-cyan-50/40 border border-cyan-100 p-5 space-y-3">
+              <Label className="text-[10px] font-black uppercase text-cyan-600 tracking-wider">下拉选项</Label>
               <PicklistValuesEditor
                 values={pkValues}
                 onChange={setPkValues}

@@ -11,21 +11,25 @@ const config: Config = {
       },
       colors: {
         // ── Tokenwave Design System color tokens ──────────────────────────
+        // Brand palette derived from the tokenwave logo cyan gradient
+        // (icon top: ~#22D3EE → bottom: ~#0E7490). Aligns with Tailwind's
+        // built-in cyan family so utilities like cyan-50 stay visually
+        // consistent with the brand-* tokens.
         brand: {
-          DEFAULT: '#FF7A00',
-          deep:    '#D96400',
-          light:   '#FFF3E6',
-          50:  '#FFF3E6',
-          100: '#FFE1C0',
-          200: '#FFCC8A',
-          300: '#FFB354',
-          400: '#FF9A24',
-          500: '#FF7A00',
-          600: '#E06900',
-          700: '#D96400',
-          800: '#B05200',
-          900: '#874000',
-          950: '#5A2B00',
+          DEFAULT: '#06B6D4',
+          deep:    '#0E7490',
+          light:   '#ECFEFF',
+          50:  '#ECFEFF',
+          100: '#CFFAFE',
+          200: '#A5F3FC',
+          300: '#67E8F9',
+          400: '#22D3EE',
+          500: '#06B6D4',
+          600: '#0891B2',
+          700: '#0E7490',
+          800: '#155E75',
+          900: '#164E63',
+          950: '#083344',
         },
         // Text / ink
         ink: {
@@ -86,7 +90,7 @@ const config: Config = {
         card:     '0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)',
         dropdown: '0 4px 16px 0 rgb(0 0 0 / 0.10)',
         modal:    '0 20px 60px 0 rgb(0 0 0 / 0.14)',
-        focus:    '0 0 0 3px rgb(255 122 0 / 0.25)',
+        focus:    '0 0 0 3px rgb(6 182 212 / 0.25)',
       },
       fontSize: {
         '2xs': ['11.5px', { lineHeight: '1.6' }],
