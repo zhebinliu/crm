@@ -287,7 +287,7 @@ function SecondaryCard({ href, icon, label, value, color }: {
   href: string; icon: React.ReactNode; label: string; value: string; color: string;
 }) {
   const map: Record<string, string> = {
-    blue: 'bg-blue-50 text-blue-600', orange: 'bg-orange-50 text-orange-600',
+    blue: 'bg-blue-50 text-blue-600', orange: 'bg-cyan-50 text-cyan-600',
     teal: 'bg-teal-50 text-teal-600', purple: 'bg-purple-50 text-purple-600',
   };
   return (
@@ -309,7 +309,7 @@ function iconBg(color: string): string {
   const map: Record<string, string> = {
     violet: 'bg-violet-50 text-violet-600', blue: 'bg-blue-50 text-blue-600',
     teal: 'bg-teal-50 text-teal-600', indigo: 'bg-indigo-50 text-indigo-600',
-    orange: 'bg-orange-50 text-orange-600', amber: 'bg-amber-50 text-amber-600',
+    orange: 'bg-cyan-50 text-cyan-600', amber: 'bg-amber-50 text-amber-600',
   };
   return map[color] ?? 'bg-slate-50 text-slate-600';
 }

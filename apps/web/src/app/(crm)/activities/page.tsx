@@ -228,7 +228,7 @@ function ActivityItem({
             variant="ghost"
             disabled={completing}
             onClick={() => onComplete(activity.id)}
-            className="h-7 text-xs px-3 rounded-lg text-[#FF8D1A] hover:bg-orange-50 hover:text-[#FF8D1A] font-bold opacity-0 group-hover:opacity-100 transition-opacity"
+            className="h-7 text-xs px-3 rounded-lg text-[#22D3EE] hover:bg-cyan-50 hover:text-[#22D3EE] font-bold opacity-0 group-hover:opacity-100 transition-opacity"
           >
             完成
           </Button>
@@ -425,7 +425,7 @@ function NewActivityDialog({
             <Button
               type="submit"
               disabled={!form.subject.trim() || creating}
-              className="rounded-xl h-10 px-5 font-bold bg-[#FF8D1A] hover:bg-[#e07d15] text-white shadow-lg shadow-orange-200/40"
+              className="rounded-xl h-10 px-5 font-bold bg-[#22D3EE] hover:bg-[#0891B2] text-white shadow-lg shadow-cyan-200/40"
             >
               {creating ? '创建中...' : '创建活动'}
             </Button>
@@ -594,7 +594,7 @@ export default function ActivitiesPage() {
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 text-[#FF8D1A] font-bold text-xs uppercase tracking-[0.2em] mb-1">
+          <div className="flex items-center gap-2 text-[#22D3EE] font-bold text-xs uppercase tracking-[0.2em] mb-1">
             <CalendarDays size={14} />
             <span>活动管理</span>
           </div>
@@ -608,7 +608,7 @@ export default function ActivitiesPage() {
           <FilterPill options={typeFilters} value={typeFilter} onChange={setTypeFilter} />
           <Button
             onClick={() => setShowCreate(true)}
-            className="rounded-xl h-10 px-5 font-bold bg-[#FF8D1A] hover:bg-[#e07d15] text-white shadow-lg shadow-orange-200/40"
+            className="rounded-xl h-10 px-5 font-bold bg-[#22D3EE] hover:bg-[#0891B2] text-white shadow-lg shadow-cyan-200/40"
           >
             <Plus size={16} className="mr-1.5" />
             新建活动
@@ -629,8 +629,8 @@ export default function ActivitiesPage() {
         <StatCard
           label="待办任务"
           value={stats.openCount}
-          icon={<Clock size={20} className="text-[#FF8D1A]" />}
-          accent="bg-orange-50"
+          icon={<Clock size={20} className="text-[#22D3EE]" />}
+          accent="bg-cyan-50"
         />
         <StatCard
           label="今日活动"

@@ -132,7 +132,7 @@ export default function AdminUsersPage() {
                     <TableCell>
                       <div className="flex flex-wrap gap-1.5">
                         {u.roles?.map((r) => (
-                          <Badge key={r.role.code} variant="secondary" className="bg-orange-50 text-orange-600 border-none font-medium px-2 py-0">
+                          <Badge key={r.role.code} variant="secondary" className="bg-cyan-50 text-cyan-600 border-none font-medium px-2 py-0">
                             {r.role.name}
                           </Badge>
                         ))}

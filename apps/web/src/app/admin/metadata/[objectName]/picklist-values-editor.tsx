@@ -122,7 +122,7 @@ export function PicklistValuesEditor({ values, onChange, hint, showActiveToggle 
                 value={v.value}
                 onChange={(e) => update(i, { value: e.target.value })}
                 placeholder="hot"
-                className="h-9 text-sm font-mono border-orange-200/70"
+                className="h-9 text-sm font-mono border-cyan-200/70"
               />
             </div>
 
@@ -132,7 +132,7 @@ export function PicklistValuesEditor({ values, onChange, hint, showActiveToggle 
                 value={v.label}
                 onChange={(e) => update(i, { label: e.target.value })}
                 placeholder="热客户"
-                className="h-9 text-sm border-orange-200/70"
+                className="h-9 text-sm border-cyan-200/70"
               />
             </div>
 
@@ -142,14 +142,14 @@ export function PicklistValuesEditor({ values, onChange, hint, showActiveToggle 
                 type="color"
                 value={isValidHex(v.color) ? v.color : '#ffffff'}
                 onChange={(e) => update(i, { color: e.target.value })}
-                className="w-9 h-9 rounded-lg border border-orange-200/70 bg-white cursor-pointer p-0.5"
+                className="w-9 h-9 rounded-lg border border-cyan-200/70 bg-white cursor-pointer p-0.5"
                 title="选择颜色"
               />
               <Input
                 value={v.color}
                 onChange={(e) => update(i, { color: e.target.value })}
                 placeholder="#ef4444"
-                className="h-9 text-[11px] font-mono border-orange-200/70 px-2 min-w-0 flex-1"
+                className="h-9 text-[11px] font-mono border-cyan-200/70 px-2 min-w-0 flex-1"
               />
             </div>
 
@@ -193,7 +193,7 @@ export function PicklistValuesEditor({ values, onChange, hint, showActiveToggle 
         type="button"
         variant="outline"
         size="sm"
-        className="rounded-xl h-8 font-bold gap-1 border-orange-200 text-orange-600 hover:bg-orange-100 text-xs"
+        className="rounded-xl h-8 font-bold gap-1 border-cyan-200 text-cyan-600 hover:bg-cyan-100 text-xs"
         onClick={() => onChange([...values, { value: '', label: '', color: '', isActive: true }])}
       >
         <Plus size={12} /> 添加选项

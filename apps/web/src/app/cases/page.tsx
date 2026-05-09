@@ -31,7 +31,7 @@ const STATUS_BADGE: Record<string, string> = {
 
 const PRIORITY_BADGE: Record<string, string> = {
   URGENT: 'bg-rose-500 text-white',
-  HIGH: 'bg-orange-500 text-white',
+  HIGH: 'bg-cyan-500 text-white',
   NORMAL: 'bg-slate-200 text-slate-700',
   LOW: 'bg-slate-100 text-slate-500',
 };

@@ -32,7 +32,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 function getCategoryColor(cat?: string) {
   if (!cat) return 'bg-slate-50 text-slate-500 border-slate-100';
-  return CATEGORY_COLORS[cat] ?? 'bg-orange-50 text-orange-700 border-orange-100';
+  return CATEGORY_COLORS[cat] ?? 'bg-cyan-50 text-cyan-700 border-cyan-100';
 }
 
 export default function EmailTemplatesPage() {

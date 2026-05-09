@@ -66,7 +66,7 @@ const TYPE_COLOR: Record<string, string> = {
   'quote.created':     'bg-cyan-50 text-cyan-700 ring-cyan-200',
   'order.created':     'bg-pink-50 text-pink-700 ring-pink-200',
   'campaign.member':   'bg-fuchsia-50 text-fuchsia-700 ring-fuchsia-200',
-  'ai.insight':        'bg-orange-50 text-orange-700 ring-orange-200',
+  'ai.insight':        'bg-cyan-50 text-cyan-700 ring-cyan-200',
 };
 
 export default function PersonDetailPage() {

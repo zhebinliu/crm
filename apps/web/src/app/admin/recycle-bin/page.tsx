@@ -55,7 +55,7 @@ const RECORD_TYPE_COLOR: Record<string, string> = {
   case: 'bg-amber-50 text-amber-700',
   quote: 'bg-pink-50 text-pink-700',
   order: 'bg-fuchsia-50 text-fuchsia-700',
-  contract: 'bg-orange-50 text-orange-700',
+  contract: 'bg-cyan-50 text-cyan-700',
   activity: 'bg-slate-100 text-slate-700',
 };
 

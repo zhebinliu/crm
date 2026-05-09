@@ -7,8 +7,8 @@
 
 :root {
   --radius:    8px;
-  --accent:    #FF7A00;
-  --accent-deep: #D96400;
+  --accent:    #06B6D4;
+  --accent-deep: #0E7490;
   --canvas:    #F7F7F8;
   --line:      #E5E7EB;
   --sidebar-w: 240px;
@@ -50,15 +50,15 @@
 
   .ds-btn-primary {
     @apply btn text-white shadow-sm hover:shadow;
-    background: linear-gradient(135deg, #FF8D1A, #FF7A00);
+    background: linear-gradient(135deg, #22D3EE, #06B6D4);
   }
-  .ds-btn-primary:hover { background: linear-gradient(135deg, #FF7A00, #D96400); }
+  .ds-btn-primary:hover { background: linear-gradient(135deg, #06B6D4, #0E7490); }
 
   .btn-primary {
     @apply btn text-white hover:shadow;
-    background: linear-gradient(135deg, #FF8D1A, #FF7A00);
+    background: linear-gradient(135deg, #22D3EE, #06B6D4);
   }
-  .btn-primary:hover { background: linear-gradient(135deg, #FF7A00, #D96400); }
+  .btn-primary:hover { background: linear-gradient(135deg, #06B6D4, #0E7490); }
 
   .btn-secondary {
     @apply btn bg-surface text-ink border border-border

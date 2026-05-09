@@ -71,8 +71,8 @@ const TYPE_STYLE: Record<string, string> = {
   BOOLEAN: 'bg-violet-50 text-violet-600',
   DATE: 'bg-slate-100 text-slate-600',
   DATETIME: 'bg-slate-100 text-slate-600',
-  PICKLIST: 'bg-orange-50 text-orange-600',
-  MULTI_PICKLIST: 'bg-orange-50 text-orange-600',
+  PICKLIST: 'bg-cyan-50 text-cyan-600',
+  MULTI_PICKLIST: 'bg-cyan-50 text-cyan-600',
   REFERENCE: 'bg-indigo-50 text-indigo-600',
   FORMULA: 'bg-fuchsia-50 text-fuchsia-600',
   JSON: 'bg-slate-100 text-slate-600',
@@ -322,9 +322,9 @@ export default function MetadataObjectPage() {
 
             {/* PICKLIST / MULTI_PICKLIST: existing or inline values */}
             {(newField.type === 'PICKLIST' || newField.type === 'MULTI_PICKLIST') && (
-              <div className="rounded-2xl bg-orange-50/40 border border-orange-100 p-5 space-y-3">
+              <div className="rounded-2xl bg-cyan-50/40 border border-cyan-100 p-5 space-y-3">
                 <div className="flex items-center justify-between">
-                  <Label className="text-[10px] font-black uppercase text-orange-600 tracking-wider">
+                  <Label className="text-[10px] font-black uppercase text-cyan-600 tracking-wider">
                     下拉选项配置
                   </Label>
                   {(existingPicklists?.length ?? 0) > 0 && (
@@ -332,7 +332,7 @@ export default function MetadataObjectPage() {
                       value={newField.picklistId || '__inline'}
                       onValueChange={(v) => setNewField({ ...newField, picklistId: v === '__inline' ? '' : v })}
                     >
-                      <SelectTrigger className="h-8 w-64 border-orange-200 text-xs">
+                      <SelectTrigger className="h-8 w-64 border-cyan-200 text-xs">
                         <SelectValue placeholder="使用现有选项库或新建" />
                       </SelectTrigger>
                       <SelectContent>
